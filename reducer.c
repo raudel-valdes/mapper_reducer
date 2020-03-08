@@ -132,7 +132,7 @@ int main(int argc, char * argv[]){
     printf("Ready to receive...");
 
      msg.type = 1;
-  strcpy(msg.content, "Studying Operating Systems Is Fun!\n");
+    strcpy(msg.content, "Studying Operating Systems Is Fun!\n");
 
   if(msgsnd(message_queue_id, &msg, MESSAGESIZE, 0) == -1) {
     perror("Error in msgsnd");
