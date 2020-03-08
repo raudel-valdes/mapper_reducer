@@ -1,6 +1,6 @@
-#include<stdio.h>
-#include<stdlib.h>
-#include<dirent.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <dirent.h>
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/wait.h>
@@ -13,7 +13,7 @@ void *mapItemCreator(void *);
 
 int main(int argc, char *argv[]) {
 
-  if(argc != 2) {
+  if(argc != 3) {
     printf("Please include the following things at execution time: \n");
     printf("\t 1) commandFile. \n");
     printf("\t 2) bufferSize \n");
@@ -35,12 +35,13 @@ void processCreator(char *arguments[]) {
 
   if(commandFilePtr == NULL) {
 
-    printf("The file %s could not be open. Please try again!", arguments[1]);
+    printf("The file %s could not be open. Please try again!\n", arguments[1]);
     exit(EXIT_FAILURE);
 
   }
 
-  while(fscanf(commandFilePtr, "%ms", &scannedWord) != EOF) {
+  while(fscanf(commandFilePtr, "%ms", &scannedWord) == 1 && processID == 0) {
+    printf("Word Scanned: %s \n", scannedWord);
 
     processID = fork();
 
@@ -49,7 +50,9 @@ void processCreator(char *arguments[]) {
       exit(-1);
     }
 
-    threadCreator(&scannedWord);
+    if(processID == 0)
+      threadCreator(&scannedWord);
+    else wait(NULL);
 
   }
 
@@ -93,7 +96,7 @@ void threadCreator(char **scannedWord) {
 
 
 void *mapItemCreator(void *filePath) {
-  printf("Hello There \n");
+  printf("\n Hello There \n");
 
   pthread_exit(0);
 }
