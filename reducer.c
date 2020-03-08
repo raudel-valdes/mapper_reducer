@@ -2,9 +2,10 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdbool.h>
-#include <sys/shm.h>
-#include <sys/stat.h>
-#include <sys/mman.h>
+#include <errno.h>
+#include <sys/types.h>
+#include <sys/ipc.h>
+#include <sys/msg.h>
 
 
 // message size ??
@@ -14,36 +15,37 @@ typedef struct message{
     long int type;
     char content[MESSAGESIZE];
 
-}message;
+}Message;
 
 typedef struct node{
     char* key;
     int count;
     struct node *next;
     struct node *prev;
-}node;
+}Node;
 
-node* init_node(char * key){
-    node *nd = (node *) malloc(sizeof(node));
+Node* init_node(char * key){
+    Node *nd = (Node *) malloc(sizeof(Node));
     nd->key = strdup(key);
+    nd->count = 1;
     return nd;
 }
 
-void destroy_node(node *node){
+void destroy_node(Node *node){
 	free(node->key);
 }
 
 typedef struct list{
     struct node *head;
     struct node *tail;
-}list;
+}List;
 
-void initList(list *newlt){
+void initList(List *newlt){
 	newlt->head=NULL;
 	newlt->tail=NULL;
 }
 
-void insert(list *list, node *node){
+void insert(List *list, Node *node){
     // If the list is empty point head and tail to the same element just created
     if(list->head==NULL){
         list->head=node;
@@ -57,9 +59,9 @@ void insert(list *list, node *node){
     }
 }
 
-bool validate(list* lt, message msg){
+bool validate(List* lt, Message msg){
     // search for the key, if found increment counter and return true
-    node *node = lt->head;
+    Node *node = lt->head;
     bool exists=false;
     while(node!=NULL){
         if(strcmp(node->key, msg.content)==0){
@@ -69,33 +71,31 @@ bool validate(list* lt, message msg){
         node = node->next;
     }
     return exists;
-    
 }
 
-void add_message(list* list, message msg){
+void add_message(List* list, Message msg){
     
-    node *n = createNode(name, 1);
-	free(name);
-	if(!validateWord(list, n->word)){
+	if(!validate(list, msg)){
+        Node *n = init_node(msg.content);
         insert(list, n);
 	}
-	else{
-	    destroy_node(n);
-		free(n);
-	}
+	// As a reference: if memory leaks, check for the node creation,
+    // it may be the case that the insertion fails and the memory
+    // allocated for the node is being not deallocated
+    // If needed add a <else> clause to destroy the node
 }
 
 // Print out list
-void printList(list *list){
-    node *n = list->head;
+void printList(List *list){
+    Node *n = list->head;
     while(n!=NULL){
         printf("%s,%d\n", n->key, n->count);
         n = n->next;
     }
 }
 
-void destroy(list* list){
-	node *node;
+void destroy(List* list){
+	Node *node;
 	while(list->head!=NULL){
 		node = list->head;
 		list->head=list->head->next;
@@ -104,41 +104,63 @@ void destroy(list* list){
 	}
 }
 
-int main(int argc, char * argv[]){
-    
-    key_t key = ftok("mapper.c",1);
-    int message_queue_id = msgget(key, 6445);
-    message msg;
 
-    list *lt = (list *) malloc(sizeof(list));
-    
+int main(int argc, char * argv[]){
+
+    key_t key = ftok("mapper.c",1);
+    int message_queue_id;
+    Message msg;
+
+    List *lt = (List *) malloc(sizeof(List));
+
     // return -1 on failure and exit
     if (key == -1) {
         perror("ftok");
         exit(1);
     }
 
-    // return - on failure and exit
-    if (message_queue_id == -1)
+    // return -1 on failure and exit
+   /* if (message_queue_id == -1)
     {
         perror("msgget");
-    }
-
-    printf("Ready to receive...");
-
-    if (msgrcv(message_queue_id, &msg, MESSAGESIZE, 0, 0) != -1) {
-        add_message(lt,msg);
-    }else
-    {
-        perror("msgrcv");
-        exit(1);
-    }
-
-    // clear message, error out if -1
-    if (msgctl(message_queue_id, IPC_RMID, NULL) == -1) {
-    perror("msgctl");
+    }*/
+    if ((message_queue_id = msgget(key, 0644 | IPC_CREAT)) == -1) {
+    perror("msgget");
     exit(1);
   }
 
+    printf("Ready to receive...");
 
+     msg.type = 1;
+  strcpy(msg.content, "Studying Operating Systems Is Fun!\n");
+
+  if(msgsnd(message_queue_id, &msg, MESSAGESIZE, 0) == -1) {
+    perror("Error in msgsnd");
+  }
+
+int ct=5;
+    while(ct!=0){
+
+        printf("Ready to receive...\n");
+
+  if(msgsnd(message_queue_id, &msg, MESSAGESIZE, 0) == -1) {
+    perror("Error in msgsnd");
+  }
+
+   if (msgrcv(message_queue_id, &msg, MESSAGESIZE, 0, 0) != -1) {
+        add_message(lt,msg);
+        printList(lt);
+    }else
+    {
+        perror("Error in msgrcv"); 
+        exit(1);
+    }
+    ct--;
+    }
+
+     // clear message, error out if -1
+    if (msgctl(message_queue_id, IPC_RMID, NULL) == -1) {
+    perror("msgctl");
+    exit(1);
+    }
 }
