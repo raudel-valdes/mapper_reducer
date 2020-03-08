@@ -5,10 +5,11 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <pthread.h>
+#include <string.h>
 
-processCreator(char **);
-threadCreator(char **);
-mapItemCreator(char **);
+void processCreator(char *[]);
+void threadCreator(char **);
+void *mapItemCreator(void *);
 
 int main(int argc, char *argv[]) {
 
@@ -19,13 +20,13 @@ int main(int argc, char *argv[]) {
     exit(EXIT_FAILURE);
   }
 
-  processCreator(&argv);
+  processCreator(argv);
 
 
   return 0;
 }
 
-processCreator(char **arguments) {
+void processCreator(char *arguments[]) {
   FILE *commandFilePtr = NULL;
   char *scannedWord = NULL;
   pid_t processID;
@@ -39,8 +40,7 @@ processCreator(char **arguments) {
 
   }
 
-  while(fscanf(commandFilePtr, "%ms", scannedWord) != EOF) {
-
+  while(fscanf(commandFilePtr, "%ms", &scannedWord) != EOF) {
 
     processID = fork();
 
@@ -55,29 +55,33 @@ processCreator(char **arguments) {
 
 }
 
-threadCreator(char **scannedWord) {
+void threadCreator(char **scannedWord) {
   DIR *threadDirPtr;
   struct dirent *directoryStruct;
   char *fileExtensionPtr = NULL;
   pthread_t threadID;
   pthread_attr_t threadAttributes;
 
-  threadDirPtr = opendir(scannedWord);
+  threadDirPtr = opendir((*scannedWord));
 
   if(!threadDirPtr) {
 
-    printf("The file %s could not be open. Please try again!", scannedWord);
+    printf("The file %s could not be open. Please try again!", (*scannedWord));
     exit(EXIT_FAILURE);
 
   }
 
   while((directoryStruct = readdir(threadDirPtr)) != NULL) {
 
-    if(directoryStruct->d_type == ".txt") {
+    if((fileExtensionPtr = strrchr(directoryStruct->d_name,'.')) != NULL ) {
       
-      pthread_attr_init(&threadAttributes);
-      pthread_create(&threadID, &threadAttributes, mapItemCreator, &directoryStruct->d_name);
-      pthread_join(threadID, NULL);
+      if(strcmp(fileExtensionPtr, ".txt") == 0) {
+
+        pthread_attr_init(&threadAttributes);
+        pthread_create(&threadID, &threadAttributes, mapItemCreator, &directoryStruct->d_name);
+        pthread_join(threadID, NULL);
+
+      }
 
     }
 
@@ -88,6 +92,8 @@ threadCreator(char **scannedWord) {
 }
 
 
-mapItemCreator(char **fileName) {
+void *mapItemCreator(void *filePath) {
+  printf("Hello There \n");
 
+  pthread_exit(0);
 }
