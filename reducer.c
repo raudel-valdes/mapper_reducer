@@ -11,19 +11,26 @@
 #define MESSAGESIZE 128
 
 typedef struct message{
-    int count;
+    long int type;
     char content[MESSAGESIZE];
 
 }message;
 
 typedef struct node{
-    message msg;
+    char* key;
+    int count;
     struct node *next;
     struct node *prev;
 }node;
 
-void init_node(){
+node* init_node(char * key){
     node *nd = (node *) malloc(sizeof(node));
+    nd->key = strdup(key);
+    return nd;
+}
+
+void destroy_node(node *node){
+	free(node->key);
 }
 
 typedef struct list{
@@ -50,15 +57,39 @@ void insert(list *list, node *node){
     }
 }
 
-void add_message(char * msg){
+bool validate(list* lt, message msg){
+    // search for the key, if found increment counter and return true
+    node *node = lt->head;
+    bool exists=false;
+    while(node!=NULL){
+        if(strcmp(node->key, msg.content)==0){
+            node->count++;
+             exists=true;
+        }
+        node = node->next;
+    }
+    return exists;
+    
+}
 
+void add_message(list* list, message msg){
+    
+    node *n = createNode(name, 1);
+	free(name);
+	if(!validateWord(list, n->word)){
+        insert(list, n);
+	}
+	else{
+	    destroy_node(n);
+		free(n);
+	}
 }
 
 // Print out list
 void printList(list *list){
     node *n = list->head;
     while(n!=NULL){
-        printf("%s,%d\n", n->msg.content, n->msg.count);
+        printf("%s,%d\n", n->key, n->count);
         n = n->next;
     }
 }
@@ -68,6 +99,7 @@ void destroy(list* list){
 	while(list->head!=NULL){
 		node = list->head;
 		list->head=list->head->next;
+        destroy_node(node);
 		free(node);
 	}
 }
@@ -92,8 +124,10 @@ int main(int argc, char * argv[]){
         perror("msgget");
     }
 
+    printf("Ready to receive...");
+
     if (msgrcv(message_queue_id, &msg, MESSAGESIZE, 0, 0) != -1) {
-        add(lt)
+        add_message(lt,msg);
     }else
     {
         perror("msgrcv");
