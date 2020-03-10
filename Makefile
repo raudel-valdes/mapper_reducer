@@ -4,8 +4,6 @@ LIBS = -lpthread -lrt# libs
 
 all: mapper reducer
 
-# all: mapper
-
 mapper: mapper.o
 	$(CC) -o mapper mapper.o $(LIBS)
 

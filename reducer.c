@@ -138,23 +138,18 @@ int main(int argc, char * argv[]){
     exit(1);
   }
 
-    printf("Ready to receive...");
+  //  printf("Ready to receive...");
 
      msg.type = 1;
     strcpy(msg.content, "message#");
 
-  if(msgsnd(message_queue_id, &msg, MESSAGESIZE, 0) == -1) {
+ /* if(msgsnd(message_queue_id, &msg, MESSAGESIZE, 0) == -1) {
     perror("Error in msgsnd");
-  }
+  }*/
 
-int ct=5;
-    while(ct!=0){
+    while(1){
 
-        printf("Ready to receive...\n");
-
-  if(msgsnd(message_queue_id, &msg, MESSAGESIZE, 0) == -1) {
-    perror("Error in msgsnd");
-  }
+       // printf("Ready to receive...\n");
 
    if (msgrcv(message_queue_id, &msg, MESSAGESIZE, 0, 0) != -1) {
         add_message(lt,msg);
@@ -164,7 +159,6 @@ int ct=5;
         perror("Error in msgrcv"); 
         exit(1);
     }
-    ct--;
     }
      // clear message, error out if -1
     if (msgctl(message_queue_id, IPC_RMID, NULL) == -1) {
