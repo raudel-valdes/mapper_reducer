@@ -137,6 +137,8 @@ void *mapItemCreator(void *fileName) {
     exit(1);
   }
 
+  printf("\n This is the fTok ID: %d \n", messageKey);
+
   //returns the System V message queue identifier associated with the value of the key argument.
   //It may be used either to obtain the identifier of a previously created message
   //queue (when msgflg is zero and key does not have the value IPC_PRIVATE), or to create a new set.
