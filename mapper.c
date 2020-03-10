@@ -124,7 +124,7 @@ void threadCreator(char **scannedWord) {
   }
 
   closedir(threadDirPtr);
-  exit(getpid());
+  exit(0);
 }
 
 
@@ -152,6 +152,12 @@ void *mapItemCreator(void *filePath) {
   //with the same id value. If ftok() is called with different id values 
   //or path points to different files on the same file system, it returns different keys.
   //key_t ftok(const char *path, int id);
+
+  //Have to change ftok to a THREAD SAFE library function like strtok_r()
+  //We must create a thread that becomes the sender to the bounded buffer
+  //we must count the number of threads we make so we can while loop wait() depending on the # threads
+  //we must implement the bounded buffer
+  //we must implement the semaphores
   if ((messageKey = ftok("mapper.c", 1)) == -1) {
     perror("ftok");
     exit(1);
