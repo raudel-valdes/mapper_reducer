@@ -10,7 +10,7 @@
 #include <pthread.h>
 #include <string.h>
 #include <errno.h>
-#include <sys/ipc.h>
+#include <sys/ipc.h> 
 #include <sys/msg.h>
 
 
