@@ -1,10 +1,8 @@
 CC = gcc# compiler
 CFLAGS = -pthread -Wall -g# compile flags
 LIBS = -lpthread -lrt# libs
-
+ 
 all: mapper reducer
-
-# all: mapper
 
 mapper: mapper.o
 	$(CC) -o mapper mapper.o $(LIBS)

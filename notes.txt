@@ -1,4 +1,0 @@
-git add .
-git commit -am "adding file ....."
-git push origin feature-reducer
-

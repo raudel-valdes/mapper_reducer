@@ -1,3 +1,0 @@
-/home/raudel/Documents/CECS-420/Projects/Proj3/searchdir/A
-/home/raudel/Documents/CECS-420/Projects/Proj3/searchdir/B
-/home/raudel/Documents/CECS-420/Projects/Proj3/searchdir
