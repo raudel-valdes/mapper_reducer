@@ -1,3 +1,5 @@
+#define _GNU_SOURCE
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -7,6 +9,13 @@
 #include <sys/ipc.h>
 #include <sys/msg.h>
 
+
+#include <unistd.h>
+#include <assert.h>
+#include <pthread.h>
+#include <semaphore.h>
+
+#include "mythreads.h"
 
 // message size ??
 #define MESSAGESIZE 128
@@ -132,7 +141,7 @@ int main(int argc, char * argv[]){
     printf("Ready to receive...");
 
      msg.type = 1;
-    strcpy(msg.content, "Studying Operating Systems Is Fun!\n");
+    strcpy(msg.content, "message#");
 
   if(msgsnd(message_queue_id, &msg, MESSAGESIZE, 0) == -1) {
     perror("Error in msgsnd");
@@ -157,7 +166,6 @@ int ct=5;
     }
     ct--;
     }
-
      // clear message, error out if -1
     if (msgctl(message_queue_id, IPC_RMID, NULL) == -1) {
     perror("msgctl");
