@@ -1,6 +1,3 @@
-//This is for the mythreads.h 
-#define _GNU_SOURCE
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <dirent.h>
@@ -12,15 +9,8 @@
 #include <errno.h>
 #include <sys/ipc.h> 
 #include <sys/msg.h>
+#include <string.h>
 
-
-//This header file came from the CECS-420 class website
-#include "mythreads.h"
-
-
-void processCreator(char *[]);
-void threadCreator(char **);
-void *mapItemCreator(void *);
 
 #define MAXWORDSIZE 256
 #define MAXLINESIZE 1024
@@ -34,6 +24,10 @@ int max;
 int items;
 int *buffer;
 
+void processCreator(char *);
+void threadCreator(char **);
+void *mapItemCreator(void *);
+
 int main(int argc, char *argv[]) {
 
   if(argc != 3) {
@@ -43,29 +37,35 @@ int main(int argc, char *argv[]) {
     exit(EXIT_FAILURE);
   }
 
-  processCreator(argv);
+  processCreator(argv[1]);
 
 
+  printf("\nthis is the end of the main function: %d \n", getpid());
   return 0;
 }
 
-void processCreator(char *arguments[]) {
+void processCreator(char *argument) {
+
+  printf("This is the argument: %s",argument);
   FILE *commandFilePtr = NULL;
   char *scannedWord = NULL;
   pid_t processID;
 
-  commandFilePtr = fopen(arguments[1], "r");
+  commandFilePtr = fopen(argument, "r");
 
   if(commandFilePtr == NULL) {
 
-    printf("The file %s could not be open. Please try again!\n", arguments[1]);
+    printf("The file %s could not be open in processCreator. Please try again!\n", argument);
     exit(EXIT_FAILURE);
 
   }
 
-  while(fscanf(commandFilePtr, "%ms", &scannedWord) == 1 && processID == 0) {
+  while(fscanf(commandFilePtr, "%ms", &scannedWord) != EOF) {
+    printf("\nScanned word inside of processCreator: %s", scannedWord);
 
     processID = fork();
+
+    printf("\nprocessID inside of processCreator: %d \n", getpid());
 
     if (processID < 0) {
       printf("Fork Failed\n");
@@ -74,24 +74,33 @@ void processCreator(char *arguments[]) {
 
     if(processID == 0)
       threadCreator(&scannedWord);
-    else wait(NULL);
 
   }
+
+    if(processID != 0) {
+      wait(NULL);
+    }
+
+  printf("\nThis is the end of the processcreator: %d \n", getpid());
 
 }
 
 void threadCreator(char **scannedWord) {
+
   DIR *threadDirPtr;
   struct dirent *directoryStruct;
   char *fileExtensionPtr = NULL;
   pthread_t threadID;
   pthread_attr_t threadAttributes;
+  char threadMapItemPath[MAXLINESIZE] = {};
 
+  strcat(threadMapItemPath, *scannedWord);
+  strcat(threadMapItemPath, "/");
   threadDirPtr = opendir((*scannedWord));
 
   if(!threadDirPtr) {
 
-    printf("The file %s could not be open. Please try again!", (*scannedWord));
+    printf("\nThe directory %s could not be opened in threadCreator. Please try again!", (*scannedWord));
     exit(EXIT_FAILURE);
 
   }
@@ -102,8 +111,10 @@ void threadCreator(char **scannedWord) {
       
       if(strcmp(fileExtensionPtr, ".txt") == 0) {
 
+        strcat(threadMapItemPath, directoryStruct->d_name);
+
         pthread_attr_init(&threadAttributes);
-        pthread_create(&threadID, &threadAttributes, mapItemCreator, directoryStruct->d_name);
+        pthread_create(&threadID, &threadAttributes, mapItemCreator, (void *)threadMapItemPath);
         pthread_join(threadID, NULL);
 
       }
@@ -113,19 +124,28 @@ void threadCreator(char **scannedWord) {
   }
 
   closedir(threadDirPtr);
-
+  exit(getpid());
 }
 
 
-void *mapItemCreator(void *fileName) {
+void *mapItemCreator(void *filePath) {
+
   FILE *filePtr = NULL;
   char *scannedWord = NULL;
-  mapItemStruct *mapItem = malloc(sizeof(mapItemStruct));  
-  mapItem->count = 1;
   int message_queue_id;
   key_t messageKey;
 
-  filePtr = fopen(fileName, "r");
+  mapItemStruct *mapItem = malloc(sizeof(mapItemStruct));  
+  mapItem->count = 1;
+
+  filePtr = fopen(filePath, "r");
+
+  if(filePtr == NULL) {
+
+    printf("\n The file %s could not be opened in mapItemCreator(). Please try again!\n", (char *)filePath);
+    exit(EXIT_FAILURE);
+
+  }
 
   // returns a key based on path and id(name of current file). The function returns the 
   //same key for all paths that point to the same file when called 
@@ -136,8 +156,6 @@ void *mapItemCreator(void *fileName) {
     perror("ftok");
     exit(1);
   }
-
-  printf("\n This is the fTok ID: %d \n", messageKey);
 
   //returns the System V message queue identifier associated with the value of the key argument.
   //It may be used either to obtain the identifier of a previously created message
@@ -150,7 +168,7 @@ void *mapItemCreator(void *fileName) {
     exit(1);
   }
 
-  while(fscanf(filePtr, "%ms", &scannedWord) == 1) {
+  while(fscanf(filePtr, "%ms", &scannedWord) != EOF) {
 
     strcpy(mapItem->word, scannedWord);
 
@@ -162,7 +180,11 @@ void *mapItemCreator(void *fileName) {
     if(msgsnd(message_queue_id, &mapItem, MAXWORDSIZE, 0) == -1)
       perror("Error in msgsnd");
 
+    printf("\nHello there! \n");
+
   }
+
+    printf(" \n created a message!!! %d \n", getpid());
 
   pthread_exit(0);
 }
