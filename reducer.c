@@ -151,7 +151,7 @@ int main(int argc, char * argv[]){
        // printf("Ready to receive...\n");
 
    if (msgrcv(message_queue_id, &msg, MESSAGESIZE, 0, 0) != -1) {
-        
+        printf("Message queue id: %d", message_queue_id);
         add_message(lt,msg);
     }else
     {
