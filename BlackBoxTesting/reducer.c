@@ -146,24 +146,23 @@ int main(int argc, char * argv[]){
  /* if(msgsnd(message_queue_id, &msg, MESSAGESIZE, 0) == -1) {
     perror("Error in msgsnd");
   }*/
-    // int x = 0;
-    // while(x == 0){
-        // x++;
+    int x = 0;
+    while(x == 0){
+        x++;
        // printf("Ready to receive...\n");
 
    if (msgrcv(message_queue_id, &msg, MESSAGESIZE, 0, 0) != -1) {
         add_message(lt,msg);
+        printList(lt);
     }else
     {
         perror("Error in msgrcv"); 
         exit(1);
     }
-    // }
+    }
      // clear message, error out if -1
     if (msgctl(message_queue_id, IPC_RMID, NULL) == -1) {
     perror("msgctl");
     exit(1);
     }
-
-    printList(lt);
 }
