@@ -133,7 +133,7 @@ int main(int argc, char * argv[]){
     {
         perror("msgget");
     }*/
-    if ((message_queue_id = msgget(key, 0644 | IPC_CREAT)) == -1) {
+    if ((message_queue_id = msgget(key, 0644)) == -1) {
     perror("msgget");
     exit(1);
   }
@@ -147,22 +147,23 @@ int main(int argc, char * argv[]){
     perror("Error in msgsnd");
   }*/
 
-    while(1){
 
        // printf("Ready to receive...\n");
 
    if (msgrcv(message_queue_id, &msg, MESSAGESIZE, 0, 0) != -1) {
+        
         add_message(lt,msg);
-        printList(lt);
     }else
     {
         perror("Error in msgrcv"); 
         exit(1);
     }
-    }
+
      // clear message, error out if -1
     if (msgctl(message_queue_id, IPC_RMID, NULL) == -1) {
     perror("msgctl");
     exit(1);
     }
+
+    printList(lt);
 }
