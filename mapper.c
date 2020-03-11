@@ -15,17 +15,36 @@
 #define MAXWORDSIZE 256
 #define MAXLINESIZE 1024
 
-typedef struct mapItemStruct {
+typedef struct MapItem {
   char word[MAXWORDSIZE];
   int count;
-} mapItemStruct;
+} MapItem;
+
+typedef struct Node{
+  MapItem item;
+  struct Node *next;
+  struct Node *prev;
+} Node;
+
+typedef struct List {
+  Node *head;
+  Node *tail;
+  int count;
+} List;
+
+void insertNodeAtTail(List *, MapItem);
+Node removeNodeAtHead(List *);
+void sortList(List *);
+void swapAdjNodes(List **, Node **, Node **);
+void printList(List *, int);
+void destroyList(List *);
 
 int max;
 int items;
 int *buffer;
 
-void processCreator(char *);
-void threadCreator(char **);
+void processCreator(char *, char*);
+void threadCreator(char **, char*);
 void *mapItemCreator(void *);
 
 int main(int argc, char *argv[]) {
@@ -37,26 +56,26 @@ int main(int argc, char *argv[]) {
     exit(EXIT_FAILURE);
   }
 
-  processCreator(argv[1]);
+  processCreator(argv[1], argv[2]);
 
 
   printf("\nthis is the end of the main function: %d \n", getpid());
   return 0;
 }
 
-void processCreator(char *argument) {
+void processCreator(char *cmdFile, char* bbufferSize) {
 
-  printf("This is the argument: %s",argument);
+  printf("This is the cmdFile: %s",cmdFile);
   FILE *commandFilePtr = NULL;
   char *scannedWord = NULL;
   pid_t processID;
   int childPCount = 0;
 
-  commandFilePtr = fopen(argument, "r");
+  commandFilePtr = fopen(cmdFile, "r");
 
   if(commandFilePtr == NULL) {
 
-    printf("The file %s could not be open in processCreator. Please try again!\n", argument);
+    printf("The file %s could not be open in processCreator. Please try again!\n", cmdFile);
     exit(EXIT_FAILURE);
 
   }
@@ -74,7 +93,7 @@ void processCreator(char *argument) {
     }
 
     if(processID == 0) {
-      threadCreator(&scannedWord);
+      threadCreator(&scannedWord, bbufferSize);
     }
 
     childPCount++;
@@ -95,7 +114,7 @@ void processCreator(char *argument) {
 
 }
 
-void threadCreator(char **scannedWord) {
+void threadCreator(char **scannedWord, char *bbufferSize) {
 
   DIR *threadDirPtr;
   struct dirent *directoryStruct;
@@ -145,7 +164,7 @@ void *mapItemCreator(void *filePath) {
   int message_queue_id;
   key_t messageKey;
 
-  mapItemStruct mapItem;
+  MapItem mapItem;
   mapItem.count = 1;
 
   filePtr = fopen(filePath, "r");
@@ -202,4 +221,161 @@ void *mapItemCreator(void *filePath) {
     printf("\n\n\n\t This Thread Finished Sending Messages!!! %d \n\n\n\n", getpid());
 
   pthread_exit(0);
+}
+
+void insertNodeAtTail(List *firstFileList, MapItem itemToInsert) {
+
+  Node *nextTailNode = malloc(sizeof(Node));
+
+  nextTailNode->item = itemToInsert;
+
+  Node *currentHeadNode = firstFileList->head;
+  Node *currentTailNode = firstFileList->tail;
+
+  if (currentHeadNode == NULL) {
+
+    nextTailNode->prev = NULL;
+    nextTailNode->next = NULL;
+
+    firstFileList->head = nextTailNode;
+    firstFileList->tail = nextTailNode;
+
+  } else {
+
+    nextTailNode->prev = currentTailNode;
+    nextTailNode->next = NULL;
+    currentTailNode->next = nextTailNode;
+    firstFileList->tail = nextTailNode;
+
+  }
+
+}
+
+Node removeNodeAtHead(List * listToRemoveNode) {
+
+}
+
+void sortList(List *unsortedList) {
+
+  Node *marker = NULL;
+  Node *markerPrev = NULL;
+  Node *compareNode = NULL;
+  Node *originalSwap = NULL;
+
+  markerPrev = unsortedList->head;
+  marker = unsortedList->head->next;  
+
+  while(marker != NULL && markerPrev != NULL) {
+
+    if (strcmp(markerPrev->item.word, marker->item.word) < 0) {
+
+      marker = marker->next;
+      markerPrev = markerPrev->next;
+
+    } else { 
+
+      swapAdjNodes(&unsortedList, &markerPrev, &marker);
+
+      originalSwap = marker;
+      marker = markerPrev->next;
+      compareNode = originalSwap->prev;
+      
+      while(compareNode != NULL && originalSwap != NULL && (strcmp(compareNode->item.word, originalSwap->item.word) > 0)) {
+       
+        swapAdjNodes(&unsortedList, &compareNode, &originalSwap);
+        compareNode = originalSwap->prev;
+      }
+
+      if (marker != NULL)
+        markerPrev = marker->prev;
+
+    }
+  }
+
+}
+
+void swapAdjNodes(List **unsortedList, Node **nodeOne, Node **nodeTwo) {
+
+  Node *tempNode = NULL;
+  tempNode = (*nodeOne)->prev;
+
+  if(tempNode != NULL) {
+
+    tempNode->next = (*nodeTwo);
+    (*nodeTwo)->prev = tempNode;
+    (*nodeOne)->next = (*nodeTwo)->next;
+    (*nodeTwo)->next = (*nodeOne);
+
+  } else {
+
+    (*nodeTwo)->prev = tempNode;
+    (*nodeOne)->next = (*nodeTwo)->next;
+    (*nodeTwo)->next = (*nodeOne);
+    (*unsortedList)->head = (*nodeTwo);
+
+  }
+
+  tempNode = (*nodeOne)->next;
+
+  if(tempNode != NULL) {
+
+    tempNode->prev = (*nodeOne);
+    (*nodeOne)->prev = (*nodeTwo);
+
+  } else {
+
+    (*nodeOne)->prev = (*nodeTwo);
+    (*unsortedList)->tail = (*nodeOne);
+
+  }
+
+}
+
+void printList(List *list, int reverse) {
+
+  Node *currentNode = NULL;
+
+  if (!reverse) {
+    currentNode = list->head;
+    
+    while (currentNode != NULL) {
+
+      printf("%s:%d\n", currentNode->item.word, currentNode->item.count);
+      currentNode = currentNode->next;
+
+    }
+
+  } else {
+    
+    currentNode = list->tail;
+    
+    while (currentNode != NULL) {
+
+      printf("%s,%d\n", currentNode->item.word, currentNode->item.count);
+      currentNode = currentNode->prev;
+
+    }
+
+  }
+
+}
+
+void destroyList(List *listToDestroy) {
+
+  Node *nodeToDestroy = NULL;
+  Node *tempNode = NULL;
+
+  nodeToDestroy = listToDestroy->head;
+    
+  while(nodeToDestroy != NULL) {
+
+    tempNode = nodeToDestroy->next;
+
+    free(nodeToDestroy->item.word);
+    //free(nodeToDestroy->item);
+    free(nodeToDestroy);
+
+    nodeToDestroy = tempNode;
+
+  }
 }
