@@ -128,27 +128,13 @@ int main(int argc, char * argv[]){
         exit(1);
     }
 
-    // return -1 on failure and exit
-   /* if (message_queue_id == -1)
-    {
-        perror("msgget");
-    }*/
-    if ((message_queue_id = msgget(key, 0644)) == -1) {
+    if ((message_queue_id = msgget(key, 0644 )) == -1) {
     perror("msgget");
     exit(1);
   }
 
-  //  printf("Ready to receive...");
-
      msg.type = 1;
     strcpy(msg.content, "message#");
-
- /* if(msgsnd(message_queue_id, &msg, MESSAGESIZE, 0) == -1) {
-    perror("Error in msgsnd");
-  }*/
-
-
-       // printf("Ready to receive...\n");
 
    if (msgrcv(message_queue_id, &msg, MESSAGESIZE, 0, 0) != -1) {
         printf("Message queue id: %d", message_queue_id);
