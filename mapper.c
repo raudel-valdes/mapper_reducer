@@ -15,6 +15,12 @@
 #define MAXWORDSIZE 256
 #define MAXLINESIZE 1024
 
+int bBufferSize = 0;
+//Might be necessary
+// int max;
+// int items;
+// int *buffer;
+
 typedef struct MapItem {
   char word[MAXWORDSIZE];
   int count;
@@ -32,19 +38,14 @@ typedef struct List {
   int count;
 } List;
 
-void insertNodeAtTail(List *, MapItem);
-Node removeNodeAtHead(List *);
+int insertNodeAtTail(List *, MapItem);
+Node * removeNodeAtHead(List *);
 void sortList(List *);
 void swapAdjNodes(List **, Node **, Node **);
 void printList(List *, int);
 void destroyList(List *);
-
-int max;
-int items;
-int *buffer;
-
-void processCreator(char *, char*);
-void threadCreator(char **, char*);
+void processCreator(char *);
+void threadCreator(char **);
 void *mapItemCreator(void *);
 
 int main(int argc, char *argv[]) {
@@ -56,14 +57,15 @@ int main(int argc, char *argv[]) {
     exit(EXIT_FAILURE);
   }
 
-  processCreator(argv[1], argv[2]);
+  bBufferSize = atoi(argv[2]);
+  processCreator(argv[1]);
 
 
   printf("\nthis is the end of the main function: %d \n", getpid());
   return 0;
 }
 
-void processCreator(char *cmdFile, char* bbufferSize) {
+void processCreator(char *cmdFile) {
 
   printf("This is the cmdFile: %s",cmdFile);
   FILE *commandFilePtr = NULL;
@@ -93,7 +95,7 @@ void processCreator(char *cmdFile, char* bbufferSize) {
     }
 
     if(processID == 0) {
-      threadCreator(&scannedWord, bbufferSize);
+      threadCreator(&scannedWord);
     }
 
     childPCount++;
@@ -114,7 +116,7 @@ void processCreator(char *cmdFile, char* bbufferSize) {
 
 }
 
-void threadCreator(char **scannedWord, char *bbufferSize) {
+void threadCreator(char **scannedWord) {
 
   DIR *threadDirPtr;
   struct dirent *directoryStruct;
@@ -223,7 +225,10 @@ void *mapItemCreator(void *filePath) {
   pthread_exit(0);
 }
 
-void insertNodeAtTail(List *firstFileList, MapItem itemToInsert) {
+int insertNodeAtTail(List *firstFileList, MapItem itemToInsert) {
+
+  if(firstFileList->count == bBufferSize)
+    return -1;
 
   Node *nextTailNode = malloc(sizeof(Node));
 
@@ -249,9 +254,32 @@ void insertNodeAtTail(List *firstFileList, MapItem itemToInsert) {
 
   }
 
+  firstFileList->count++;
 }
 
-Node removeNodeAtHead(List * listToRemoveNode) {
+
+//Will remove the node from the list but will not delete it
+//from memory. It is up to the calling function to free the 
+//memory whenever it is done using the returned Node
+Node * removeNodeAtHead(List * listToRemoveNode) {
+
+  Node *nodeToRemove = listToRemoveNode->head;
+
+  if(listToRemoveNode->count == 0)
+    return nodeToRemove = NULL;
+
+  if(nodeToRemove == NULL)
+    return nodeToRemove = NULL;
+
+
+  listToRemoveNode->head = nodeToRemove->next;
+  nodeToRemove->next->prev = NULL;
+  nodeToRemove->next = NULL;
+  nodeToRemove->prev = NULL;
+
+  return nodeToRemove;
+
+  listToRemoveNode->count --;
 
 }
 
