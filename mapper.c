@@ -50,6 +50,7 @@ void processCreator(char *argument) {
   FILE *commandFilePtr = NULL;
   char *scannedWord = NULL;
   pid_t processID;
+  int childPCount = 0;
 
   commandFilePtr = fopen(argument, "r");
 
@@ -72,14 +73,23 @@ void processCreator(char *argument) {
       exit(-1);
     }
 
-    if(processID == 0)
+    if(processID == 0) {
       threadCreator(&scannedWord);
+    }
 
+    childPCount++;
+
+    printf("Child ID: %d - Parent ID: %d \n", getpid(), getppid());
+    printf("End of the processCreator while loop\n");
   }
 
-    if(processID != 0) {
+  if(processID != 0) {
+    for(int i = 0; i <= childPCount; i++) {
+      printf("\nNumber of processes per parent: %d - %d \n", childPCount ,getpid());
+      printf("Parent Waiting: %d \n", getpid());
       wait(NULL);
     }
+  }
 
   printf("\nThis is the end of the processcreator: %d \n", getpid());
 
@@ -135,8 +145,8 @@ void *mapItemCreator(void *filePath) {
   int message_queue_id;
   key_t messageKey;
 
-  mapItemStruct *mapItem = malloc(sizeof(mapItemStruct));  
-  mapItem->count = 1;
+  mapItemStruct mapItem;
+  mapItem.count = 1;
 
   filePtr = fopen(filePath, "r");
 
@@ -176,21 +186,21 @@ void *mapItemCreator(void *filePath) {
 
   while(fscanf(filePtr, "%ms", &scannedWord) != EOF) {
 
-    strcpy(mapItem->word, scannedWord);
+    strcpy(mapItem.word, scannedWord);
 
     //used to send a message to the message queue specified by the msqid parameter. 
     //The *msgp parameter points to a user-defined buffer that must contain the 
     //following: A field of type long int that specifies the type of the message. 
     //A data part that contains the data bytes of the message.
     //int msgsnd(int msqid, void *msgp, size_t msgsz, int msgflg);
+
     if(msgsnd(message_queue_id, &mapItem, MAXWORDSIZE, 0) == -1)
       perror("Error in msgsnd");
 
-    printf("\nHello there! \n");
-
+    printf("\nMESSAGE SENT: %s", mapItem.word);
   }
 
-    printf(" \n created a message!!! %d \n", getpid());
+    printf("\ncreated a message!!! %d \n", getpid());
 
   pthread_exit(0);
 }
