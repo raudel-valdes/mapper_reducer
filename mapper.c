@@ -84,9 +84,9 @@ void processCreator(char *argument) {
   }
 
   if(processID != 0) {
-    for(int i = 0; i <= childPCount; i++) {
-      printf("\nNumber of processes per parent: %d - %d \n", childPCount ,getpid());
-      printf("Parent Waiting: %d \n", getpid());
+    for(int i = 0; i < childPCount; i++) {
+      // printf("\nNumber of processes per parent: %d - %d \n", childPCount ,getpid());
+      // printf("Parent Waiting: %d \n", getpid());
       wait(NULL);
     }
   }
@@ -163,7 +163,6 @@ void *mapItemCreator(void *filePath) {
   //or path points to different files on the same file system, it returns different keys.
   //key_t ftok(const char *path, int id);
 
-  //Have to change ftok to a THREAD SAFE library function like strtok_r()
   //We must create a thread that becomes the sender to the bounded buffer
   //we must count the number of threads we make so we can while loop wait() depending on the # threads
   //we must implement the bounded buffer
@@ -200,7 +199,7 @@ void *mapItemCreator(void *filePath) {
     printf("\nMESSAGE SENT: %s", mapItem.word);
   }
 
-    printf("\ncreated a message!!! %d \n", getpid());
+    printf("\n\n\n\t This Thread Finished Sending Messages!!! %d \n\n\n\n", getpid());
 
   pthread_exit(0);
 }
