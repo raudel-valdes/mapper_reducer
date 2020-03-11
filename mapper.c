@@ -39,7 +39,7 @@ typedef struct List {
 } List;
 
 int insertNodeAtTail(List *, MapItem);
-Node * removeNodeAtHead(List *);
+int removeNodeAtHead(List *);
 void sortList(List *);
 void swapAdjNodes(List **, Node **, Node **);
 void printList(List *, int);
@@ -185,8 +185,6 @@ void *mapItemCreator(void *filePath) {
   //key_t ftok(const char *path, int id);
 
   //We must create a thread that becomes the sender to the bounded buffer
-  //we must count the number of threads we make so we can while loop wait() depending on the # threads
-  //we must implement the bounded buffer
   //we must implement the semaphores
   if ((messageKey = ftok("mapper.c", 1)) == -1) {
     perror("ftok");
@@ -228,6 +226,7 @@ void *mapItemCreator(void *filePath) {
 int insertNodeAtTail(List *firstFileList, MapItem itemToInsert) {
 
   if(firstFileList->count == bBufferSize)
+    //buffer is full. Can't insert
     return -1;
 
   Node *nextTailNode = malloc(sizeof(Node));
@@ -255,21 +254,22 @@ int insertNodeAtTail(List *firstFileList, MapItem itemToInsert) {
   }
 
   firstFileList->count++;
+
+  //succesfully inserted node
+  return 0;
 }
 
-
-//Will remove the node from the list but will not delete it
-//from memory. It is up to the calling function to free the 
-//memory whenever it is done using the returned Node
-Node * removeNodeAtHead(List * listToRemoveNode) {
+int removeNodeAtHead(List * listToRemoveNode) {
 
   Node *nodeToRemove = listToRemoveNode->head;
 
   if(listToRemoveNode->count == 0)
-    return nodeToRemove = NULL;
+    //cannot remove node. There aren't any
+    return nodeToRemove = -1;
 
   if(nodeToRemove == NULL)
-    return nodeToRemove = NULL;
+    //cannot remove node. Node not fund
+    return nodeToRemove = -2;
 
 
   listToRemoveNode->head = nodeToRemove->next;
@@ -277,7 +277,12 @@ Node * removeNodeAtHead(List * listToRemoveNode) {
   nodeToRemove->next = NULL;
   nodeToRemove->prev = NULL;
 
-  return nodeToRemove;
+  free(nodeToRemove->item.word);
+  //free(nodeToRemove->item);
+  free(nodeToRemove);
+
+  //Success removing the node
+  return 0;
 
   listToRemoveNode->count --;
 
