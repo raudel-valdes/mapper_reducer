@@ -32,7 +32,7 @@ int main () {
   }
 
   if ((message_queue_id = msgget(key, 0444)) == -1) {
-      perror("msgget");
+      perror("msgget 1");
       exit(1);
   }
 
