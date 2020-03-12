@@ -26,6 +26,11 @@ typedef struct MapItem {
   int count;
 } MapItem;
 
+typedef struct ThreadData {
+  struct List *boundedBuffer;
+  char *path;
+} ThreadData;
+
 typedef struct Node{
   MapItem item;
   struct Node *next;
@@ -46,7 +51,7 @@ void printList(List *, int);
 void destroyList(List *);
 void processCreator(char *);
 void threadCreator(char **);
-void *mapItemCreator(void *);
+void *mapItemCreator(void*);
 
 int main(int argc, char *argv[]) {
 
@@ -124,6 +129,7 @@ void threadCreator(char **scannedWord) {
   pthread_t threadID;
   pthread_attr_t threadAttributes;
   char threadMapItemPath[MAXLINESIZE] = {};
+  ThreadData * dataForThread = NULL;
 
   strcat(threadMapItemPath, *scannedWord);
   strcat(threadMapItemPath, "/");
@@ -144,8 +150,11 @@ void threadCreator(char **scannedWord) {
 
         strcat(threadMapItemPath, directoryStruct->d_name);
 
+        dataForThread->path = threadMapItemPath;
+        dataForThread->boundedBuffer = malloc(sizeof(List));
+
         pthread_attr_init(&threadAttributes);
-        pthread_create(&threadID, &threadAttributes, mapItemCreator, (void *)threadMapItemPath);
+        pthread_create(&threadID, &threadAttributes, mapItemCreator, dataForThread);
         pthread_join(threadID, NULL);
 
       }
@@ -154,20 +163,30 @@ void threadCreator(char **scannedWord) {
 
   }
 
+  printList(dataForThread->boundedBuffer, 0);
+
   closedir(threadDirPtr);
   exit(0);
 }
 
 
-void *mapItemCreator(void *filePath) {
+void * mapItemCreator(void *threadDataRecieved) {
 
   FILE *filePtr = NULL;
   char *scannedWord = NULL;
   int message_queue_id;
   key_t messageKey;
+  char *filePath = NULL;
+  ThreadData * dataTemp = NULL;
+  List *threadBoundedBuffer = NULL;
+  MapItem itemToSend;
 
-  MapItem mapItem;
-  mapItem.count = 1;
+
+  dataTemp = (struct ThreadData *)threadDataRecieved;
+  itemToSend.count = 1;
+
+  filePath = dataTemp->path;
+  threadBoundedBuffer = dataTemp->boundedBuffer;
 
   filePtr = fopen(filePath, "r");
 
@@ -204,7 +223,7 @@ void *mapItemCreator(void *filePath) {
 
   while(fscanf(filePtr, "%ms", &scannedWord) != EOF) {
 
-    strcpy(mapItem.word, scannedWord);
+    strcpy(itemToSend.word, scannedWord);
 
     //used to send a message to the message queue specified by the msqid parameter. 
     //The *msgp parameter points to a user-defined buffer that must contain the 
@@ -212,10 +231,12 @@ void *mapItemCreator(void *filePath) {
     //A data part that contains the data bytes of the message.
     //int msgsnd(int msqid, void *msgp, size_t msgsz, int msgflg);
 
-    if(msgsnd(message_queue_id, &mapItem, MAXWORDSIZE, 0) == -1)
+    if(msgsnd(message_queue_id, &itemToSend, MAXWORDSIZE, 0) == -1)
       perror("Error in msgsnd");
 
-    printf("\nMESSAGE SENT: %s", mapItem.word);
+    insertNodeAtTail(threadBoundedBuffer, itemToSend);
+
+    printf("\nMESSAGE SENT: %s", itemToSend.word);
   }
 
     printf("\n\n\n\t This Thread Finished Sending Messages!!! %d \n\n\n\n", getpid());
@@ -265,11 +286,11 @@ int removeNodeAtHead(List * listToRemoveNode) {
 
   if(listToRemoveNode->count == 0)
     //cannot remove node. There aren't any
-    return nodeToRemove = -1;
+    return -1;
 
   if(nodeToRemove == NULL)
     //cannot remove node. Node not fund
-    return nodeToRemove = -2;
+    return -2;
 
 
   listToRemoveNode->head = nodeToRemove->next;
