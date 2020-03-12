@@ -34,10 +34,14 @@ typedef struct List {
 } List;
 
 int bBufferSize = 0;
-List *boundedBuffer;
+int use  = 0;
+int fill = 0;
+
 sem_t empty;
 sem_t full;
 sem_t mutex;
+
+List *boundedBuffer;
 
 int insertNodeAtTail(MapItem);
 int removeNodeAtHead(List *);
@@ -48,6 +52,7 @@ void destroyList(List *);
 void processCreator(char *);
 void threadCreator(char **);
 void *mapItemCreator(void*);
+void *mapItemSender(void*);
 
 int main(int argc, char *argv[]) {
 
@@ -129,14 +134,16 @@ void threadCreator(char **scannedWord) {
   DIR *threadDirPtr;
   struct dirent *directoryStruct;
   char *fileExtensionPtr = NULL;
-  pthread_attr_t threadAttributes;
+  pthread_attr_t workerThreadAttributes;
+  pthread_attr_t senderThreadAttributes;
   char *filePath = NULL;
   int numberThreadsCreated = 0;
   int numberThreadsInArray = 1;
-  pthread_t *threadIDArray = NULL;
-  pthread_t *tempThreadIDArray = NULL;
-  
-  threadIDArray = (pthread_t *)malloc(sizeof(pthread_t)*5);
+  pthread_t *workerThreadIDArray = NULL;
+  pthread_t *tempWorkerThreadIDArray = NULL;
+  pthread_t senderThreadID;
+ 
+  workerThreadIDArray = (pthread_t *)malloc(sizeof(pthread_t)*5);
   numberThreadsInArray *= 5;
 
   filePath = (char *) malloc(sizeof(char)*MAXLINESIZE);
@@ -159,27 +166,27 @@ void threadCreator(char **scannedWord) {
       if(strcmp(fileExtensionPtr, ".txt") == 0) {
 
         if(numberThreadsCreated == numberThreadsInArray){
-          tempThreadIDArray = (pthread_t *)realloc(threadIDArray, sizeof(pthread_t)*5);
+          tempWorkerThreadIDArray = (pthread_t *)realloc(workerThreadIDArray, sizeof(pthread_t)*5);
           
-          if(tempThreadIDArray == NULL) {
+          if(tempWorkerThreadIDArray == NULL) {
 
             perror("realloc returned NULL");
             exit(1);
 
           } else {
 
-            threadIDArray = tempThreadIDArray;
+            workerThreadIDArray = tempWorkerThreadIDArray;
 
           }
 
           numberThreadsInArray *= 5;
         }
 
-        threadIDArray[numberThreadsCreated] = numberThreadsCreated; 
+        workerThreadIDArray[numberThreadsCreated] = numberThreadsCreated; 
         strcat(filePath, directoryStruct->d_name);
 
-        pthread_attr_init(&threadAttributes);
-        pthread_create(&threadIDArray[numberThreadsCreated], &threadAttributes, mapItemCreator, (void*)filePath);
+        pthread_attr_init(&workerThreadAttributes);
+        pthread_create(&workerThreadIDArray[numberThreadsCreated], &workerThreadAttributes, mapItemCreator, (void*)filePath);
 
         numberThreadsCreated++;
 
@@ -189,12 +196,15 @@ void threadCreator(char **scannedWord) {
 
   }
 
+  pthread_attr_init(&senderThreadAttributes);
+  pthread_create(&senderThreadID, &senderThreadAttributes, mapItemSender, NULL);
+
   for(int i = 0; i < numberThreadsCreated; i++){
-
-    pthread_join(threadIDArray[i], NULL);
+    pthread_join(workerThreadIDArray[i], NULL);
     printf("\nJOIN THREAD: %d\n", numberThreadsCreated);  
-
   }
+
+  pthread_join(senderThreadID, NULL);
 
   printList(boundedBuffer, 0);
   printf("\nThis is the # of nodes in dbll: %d\n", boundedBuffer->count);
@@ -210,13 +220,10 @@ void * mapItemCreator(void *filePath) {
 
   FILE *filePtr = NULL;
   char *scannedWord = NULL;
-  int message_queue_id;
-  key_t messageKey;
   MapItem itemToSend;
 
   itemToSend.count = 1;
   filePtr = fopen((char *)filePath, "r");
-
 
   if(filePtr == NULL) {
 
@@ -224,8 +231,38 @@ void * mapItemCreator(void *filePath) {
     exit(EXIT_FAILURE);
 
   }
+  
+  while(fscanf(filePtr, "%ms", &scannedWord) != EOF) {
 
-  // returns a key based on path and id(name of current file). The function returns the 
+    strcpy(itemToSend.word, scannedWord);
+
+    sem_wait(&empty);
+    sem_wait(&mutex);
+
+    insertNodeAtTail(itemToSend);
+
+    sem_post(&mutex);
+    sem_post(&full);
+
+    printf("Producer - WORD: %s is inserted\n", itemToSend.word);
+
+    //  if(insertNodeAtTail(itemToSend) == -1) {
+    //    printf("\nBuffer is full...Cannot insert right now\n");
+    //  }
+
+  }
+
+  printList(boundedBuffer, 0);
+  pthread_exit(0);
+}
+
+void * mapItemSender(void * params) {
+
+  int tmp = 0;
+  int message_queue_id;
+  key_t messageKey;
+
+// returns a key based on path and id(name of current file). The function returns the 
   //same key for all paths that point to the same file when called 
   //with the same id value. If ftok() is called with different id values 
   //or path points to different files on the same file system, it returns different keys.
@@ -249,9 +286,10 @@ void * mapItemCreator(void *filePath) {
     exit(1);
   }
 
-  while(fscanf(filePtr, "%ms", &scannedWord) != EOF) {
+  while (tmp != -1) {
 
-    strcpy(itemToSend.word, scannedWord);
+    sem_wait(&full);
+    sem_wait(&mutex);
 
     //used to send a message to the message queue specified by the msqid parameter. 
     //The *msgp parameter points to a user-defined buffer that must contain the 
@@ -259,28 +297,27 @@ void * mapItemCreator(void *filePath) {
     //A data part that contains the data bytes of the message.
     //int msgsnd(int msqid, void *msgp, size_t msgsz, int msgflg);
 
-    if(msgsnd(message_queue_id, &itemToSend, MAXWORDSIZE, 0) == -1)
+    if(msgsnd(message_queue_id, &boundedBuffer->head, MAXWORDSIZE, 0) == -1)
       perror("Error in msgsnd");
 
+    tmp = removeNodeAtHead(boundedBuffer);
 
-     if(insertNodeAtTail(itemToSend) == -1) {
-       printf("\nbuffer is full cannot insert right not \n");
-     }
+    sem_post(&mutex);
+    sem_post(&empty);
 
-    printf("\nFile PATH: %s \n", (char*)filePath);
+    if (tmp != -1) {
+      printf("\nSender Thread:  word: %s, tmp: %d is extracted.\n", boundedBuffer->head->item.word, tmp);
+    }
 
   }
-
-  printf("\n\n\n\t This Thread Finished Sending Messages!!! %d \n\n\n\n", getpid());
-
-  printList(boundedBuffer, 0);
+  
   pthread_exit(0);
 }
 
 int insertNodeAtTail(MapItem itemToInsert) {
 
-  if(boundedBuffer->count == bBufferSize)
-    return -1;
+  // if(boundedBuffer->count == bBufferSize)
+  //   return -1;
 
   Node *nextTailNode = malloc(sizeof(Node));
 
@@ -307,6 +344,12 @@ int insertNodeAtTail(MapItem itemToInsert) {
   }
 
   boundedBuffer->count++;
+  fill++;
+
+  //Testing
+  if (fill == bBufferSize) {
+    fill = 0;
+  }
 
   //succesfully inserted node
   return 0;
@@ -316,13 +359,13 @@ int removeNodeAtHead(List * listToRemoveNode) {
 
   Node *nodeToRemove = listToRemoveNode->head;
 
-  if(listToRemoveNode->count == 0)
+  if(listToRemoveNode->count == 0 || nodeToRemove == NULL)
     //cannot remove node. There aren't any
     return -1;
 
-  if(nodeToRemove == NULL)
-    //cannot remove node. Node not fund
-    return -2;
+  // if(nodeToRemove == NULL)
+  //   //cannot remove node. Node not fund
+  //   return -2;
 
 
   listToRemoveNode->head = nodeToRemove->next;
