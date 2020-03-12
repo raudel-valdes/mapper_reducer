@@ -28,7 +28,7 @@ typedef struct MapItem {
 
 typedef struct ThreadData {
   struct List *boundedBuffer;
-  char *path;
+  char path[MAXLINESIZE];
 } ThreadData;
 
 typedef struct Node{
@@ -111,8 +111,8 @@ void processCreator(char *cmdFile) {
 
   if(processID != 0) {
     for(int i = 0; i < childPCount; i++) {
-      // printf("\nNumber of processes per parent: %d - %d \n", childPCount ,getpid());
-      // printf("Parent Waiting: %d \n", getpid());
+      printf("\nNumber of processes per parent: %d - %d \n", i ,getpid());
+      printf("Parent Waiting: %d \n", getpid());
       wait(NULL);
     }
   }
@@ -128,11 +128,12 @@ void threadCreator(char **scannedWord) {
   char *fileExtensionPtr = NULL;
   pthread_t threadID;
   pthread_attr_t threadAttributes;
-  char threadMapItemPath[MAXLINESIZE] = {};
   ThreadData * dataForThread = NULL;
 
-  strcat(threadMapItemPath, *scannedWord);
-  strcat(threadMapItemPath, "/");
+  dataForThread = malloc(sizeof(ThreadData));
+
+  strcat(dataForThread->path, *scannedWord);
+  strcat(dataForThread->path, "/");
   threadDirPtr = opendir((*scannedWord));
 
   if(!threadDirPtr) {
@@ -142,19 +143,18 @@ void threadCreator(char **scannedWord) {
 
   }
 
+
   while((directoryStruct = readdir(threadDirPtr)) != NULL) {
 
     if((fileExtensionPtr = strrchr(directoryStruct->d_name,'.')) != NULL ) {
       
       if(strcmp(fileExtensionPtr, ".txt") == 0) {
 
-        strcat(threadMapItemPath, directoryStruct->d_name);
-
-        dataForThread->path = threadMapItemPath;
+        strcat(dataForThread->path, directoryStruct->d_name);
         dataForThread->boundedBuffer = malloc(sizeof(List));
 
         pthread_attr_init(&threadAttributes);
-        pthread_create(&threadID, &threadAttributes, mapItemCreator, dataForThread);
+        pthread_create(&threadID, &threadAttributes, mapItemCreator, (void*)dataForThread);
         pthread_join(threadID, NULL);
 
       }
@@ -164,7 +164,7 @@ void threadCreator(char **scannedWord) {
   }
 
   printList(dataForThread->boundedBuffer, 0);
-
+  printf("This is the # of nodes in dbll: %d", dataForThread->boundedBuffer->count);
   closedir(threadDirPtr);
   exit(0);
 }
@@ -180,6 +180,8 @@ void * mapItemCreator(void *threadDataRecieved) {
   ThreadData * dataTemp = NULL;
   List *threadBoundedBuffer = NULL;
   MapItem itemToSend;
+
+    printf("\nERROR IN THREADS1!!\n");
 
 
   dataTemp = (struct ThreadData *)threadDataRecieved;
@@ -234,6 +236,7 @@ void * mapItemCreator(void *threadDataRecieved) {
     if(msgsnd(message_queue_id, &itemToSend, MAXWORDSIZE, 0) == -1)
       perror("Error in msgsnd");
 
+  printf("\nERROR IN THREADS!!\n");
     insertNodeAtTail(threadBoundedBuffer, itemToSend);
 
     printf("\nMESSAGE SENT: %s", itemToSend.word);
