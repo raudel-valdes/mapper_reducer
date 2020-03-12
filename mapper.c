@@ -10,26 +10,16 @@
 #include <sys/ipc.h> 
 #include <sys/msg.h>
 #include <string.h>
+#include <semaphore.h>
 
 
 #define MAXWORDSIZE 256
 #define MAXLINESIZE 1024
 
-int bBufferSize = 0;
-//Might be necessary
-// int max;
-// int items;
-// int *buffer;
-
 typedef struct MapItem {
   char word[MAXWORDSIZE];
   int count;
 } MapItem;
-
-typedef struct ThreadData {
-  struct List *boundedBuffer;
-  char path[MAXLINESIZE];
-} ThreadData;
 
 typedef struct Node{
   MapItem item;
@@ -43,7 +33,13 @@ typedef struct List {
   int count;
 } List;
 
-int insertNodeAtTail(List *, MapItem);
+int bBufferSize = 0;
+List *boundedBuffer;
+sem_t empty;
+sem_t full;
+sem_t mutex;
+
+int insertNodeAtTail(MapItem);
 int removeNodeAtHead(List *);
 void sortList(List *);
 void swapAdjNodes(List **, Node **, Node **);
@@ -63,8 +59,15 @@ int main(int argc, char *argv[]) {
   }
 
   bBufferSize = atoi(argv[2]);
-  processCreator(argv[1]);
+  boundedBuffer = (List *) malloc(sizeof(List));
+  boundedBuffer->count = 0;
+  boundedBuffer->head = NULL;
+  boundedBuffer->tail = NULL;
+  sem_init(&empty, 0, 0);
+  sem_init(&full, 0, 0);
+  sem_init(&mutex, 0, 1); 
 
+  processCreator(argv[1]);
 
   printf("\nthis is the end of the main function: %d \n", getpid());
   return 0;
@@ -105,14 +108,14 @@ void processCreator(char *cmdFile) {
 
     childPCount++;
 
-    printf("Child ID: %d - Parent ID: %d \n", getpid(), getppid());
-    printf("End of the processCreator while loop\n");
+    printf("\nChild ID: %d - Parent ID: %d \n", getpid(), getppid());
+    printf("\nEnd of the processCreator while loop\n");
   }
 
   if(processID != 0) {
     for(int i = 0; i < childPCount; i++) {
       printf("\nNumber of processes per parent: %d - %d \n", i ,getpid());
-      printf("Parent Waiting: %d \n", getpid());
+      printf("\nParent Waiting: %d \n", getpid());
       wait(NULL);
     }
   }
@@ -126,14 +129,20 @@ void threadCreator(char **scannedWord) {
   DIR *threadDirPtr;
   struct dirent *directoryStruct;
   char *fileExtensionPtr = NULL;
-  pthread_t threadID;
   pthread_attr_t threadAttributes;
-  ThreadData * dataForThread = NULL;
+  char *filePath = NULL;
+  int numberThreadsCreated = 0;
+  int numberThreadsInArray = 1;
+  pthread_t *threadIDArray = NULL;
+  pthread_t *tempThreadIDArray = NULL;
+  
+  threadIDArray = (pthread_t *)malloc(sizeof(pthread_t)*5);
+  numberThreadsInArray *= 5;
 
-  dataForThread = malloc(sizeof(ThreadData));
+  filePath = (char *) malloc(sizeof(char)*MAXLINESIZE);
 
-  strcat(dataForThread->path, *scannedWord);
-  strcat(dataForThread->path, "/");
+  strcat(filePath, *scannedWord);
+  strcat(filePath, "/");
   threadDirPtr = opendir((*scannedWord));
 
   if(!threadDirPtr) {
@@ -143,19 +152,36 @@ void threadCreator(char **scannedWord) {
 
   }
 
-
   while((directoryStruct = readdir(threadDirPtr)) != NULL) {
 
     if((fileExtensionPtr = strrchr(directoryStruct->d_name,'.')) != NULL ) {
       
       if(strcmp(fileExtensionPtr, ".txt") == 0) {
 
-        strcat(dataForThread->path, directoryStruct->d_name);
-        dataForThread->boundedBuffer = malloc(sizeof(List));
+        if(numberThreadsCreated == numberThreadsInArray){
+          tempThreadIDArray = (pthread_t *)realloc(threadIDArray, sizeof(pthread_t)*5);
+          
+          if(tempThreadIDArray == NULL) {
+
+            perror("realloc returned NULL");
+            exit(1);
+
+          } else {
+
+            threadIDArray = tempThreadIDArray;
+
+          }
+
+          numberThreadsInArray *= 5;
+        }
+
+        threadIDArray[numberThreadsCreated] = numberThreadsCreated; 
+        strcat(filePath, directoryStruct->d_name);
 
         pthread_attr_init(&threadAttributes);
-        pthread_create(&threadID, &threadAttributes, mapItemCreator, (void*)dataForThread);
-        pthread_join(threadID, NULL);
+        pthread_create(&threadIDArray[numberThreadsCreated], &threadAttributes, mapItemCreator, (void*)filePath);
+
+        numberThreadsCreated++;
 
       }
 
@@ -163,34 +189,34 @@ void threadCreator(char **scannedWord) {
 
   }
 
-  printList(dataForThread->boundedBuffer, 0);
-  printf("This is the # of nodes in dbll: %d", dataForThread->boundedBuffer->count);
+  for(int i = 0; i < numberThreadsCreated; i++){
+
+    pthread_join(threadIDArray[i], NULL);
+    printf("\nJOIN THREAD: %d\n", numberThreadsCreated);  
+
+  }
+
+  printList(boundedBuffer, 0);
+  printf("\nThis is the # of nodes in dbll: %d\n", boundedBuffer->count);
+
+
   closedir(threadDirPtr);
+
   exit(0);
 }
 
 
-void * mapItemCreator(void *threadDataRecieved) {
+void * mapItemCreator(void *filePath) {
 
   FILE *filePtr = NULL;
   char *scannedWord = NULL;
   int message_queue_id;
   key_t messageKey;
-  char *filePath = NULL;
-  ThreadData * dataTemp = NULL;
-  List *threadBoundedBuffer = NULL;
   MapItem itemToSend;
 
-    printf("\nERROR IN THREADS1!!\n");
-
-
-  dataTemp = (struct ThreadData *)threadDataRecieved;
   itemToSend.count = 1;
+  filePtr = fopen((char *)filePath, "r");
 
-  filePath = dataTemp->path;
-  threadBoundedBuffer = dataTemp->boundedBuffer;
-
-  filePtr = fopen(filePath, "r");
 
   if(filePtr == NULL) {
 
@@ -236,48 +262,51 @@ void * mapItemCreator(void *threadDataRecieved) {
     if(msgsnd(message_queue_id, &itemToSend, MAXWORDSIZE, 0) == -1)
       perror("Error in msgsnd");
 
-  printf("\nERROR IN THREADS!!\n");
-    insertNodeAtTail(threadBoundedBuffer, itemToSend);
 
-    printf("\nMESSAGE SENT: %s", itemToSend.word);
+     if(insertNodeAtTail(itemToSend) == -1) {
+       printf("\nbuffer is full cannot insert right not \n");
+     }
+
+    printf("\nFile PATH: %s \n", (char*)filePath);
+
   }
 
-    printf("\n\n\n\t This Thread Finished Sending Messages!!! %d \n\n\n\n", getpid());
+  printf("\n\n\n\t This Thread Finished Sending Messages!!! %d \n\n\n\n", getpid());
 
+  printList(boundedBuffer, 0);
   pthread_exit(0);
 }
 
-int insertNodeAtTail(List *firstFileList, MapItem itemToInsert) {
+int insertNodeAtTail(MapItem itemToInsert) {
 
-  if(firstFileList->count == bBufferSize)
-    //buffer is full. Can't insert
+  if(boundedBuffer->count == bBufferSize)
     return -1;
 
   Node *nextTailNode = malloc(sizeof(Node));
 
   nextTailNode->item = itemToInsert;
 
-  Node *currentHeadNode = firstFileList->head;
-  Node *currentTailNode = firstFileList->tail;
+  Node *currentHeadNode = boundedBuffer->head;
+  Node *currentTailNode = boundedBuffer->tail;
 
   if (currentHeadNode == NULL) {
 
     nextTailNode->prev = NULL;
     nextTailNode->next = NULL;
 
-    firstFileList->head = nextTailNode;
-    firstFileList->tail = nextTailNode;
+    boundedBuffer->head = nextTailNode;
+    boundedBuffer->tail = nextTailNode;
 
   } else {
 
     nextTailNode->prev = currentTailNode;
     nextTailNode->next = NULL;
     currentTailNode->next = nextTailNode;
-    firstFileList->tail = nextTailNode;
+    boundedBuffer->tail = nextTailNode;
 
   }
 
-  firstFileList->count++;
+  boundedBuffer->count++;
 
   //succesfully inserted node
   return 0;
