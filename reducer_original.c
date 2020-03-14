@@ -134,18 +134,19 @@ int main(int argc, char * argv[]){
     exit(1);
   }
     // reducer can't stop til mapper sends the signal
-    while(1){
-        sem_wait(&full);
-        sem_wait(&mutex);
-        if (msgrcv(message_queue_id, &msg, MESSAGESIZE, 0, 0) != -1) {
+    // while(1){
+        // sem_wait(&full);
+        // sem_wait(&mutex);
+        while (msgrcv(message_queue_id, &msg, MESSAGESIZE, 0, 0) != -1) {
             printf("Message queue id: %d", message_queue_id);
             add_message(lt,msg);
-        }else
-            {
-                perror("Error in msgrcv"); 
-                exit(1);
-            }
-    }
+        }
+        // else
+        //     {
+        //         perror("Error in msgrcv"); 
+        //         exit(1);
+        //     }
+    // }
      // destroy message queue
      // check using command ipcs -q
     if (msgctl(message_queue_id, IPC_RMID, NULL) == -1) {
@@ -155,6 +156,6 @@ int main(int argc, char * argv[]){
 
     printList(lt);
 
-    sem_post(&mutex);
-    sem_post(&empty);
+    // sem_post(&mutex);
+    // sem_post(&empty);
 }

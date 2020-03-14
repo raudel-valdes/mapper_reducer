@@ -44,7 +44,7 @@ sem_t mutex;
 List *boundedBuffer;
 
 int insertNodeAtTail(MapItem);
-int removeNodeAtHead(List *);
+void removeNodeAtHead(List *);
 void sortList(List *);
 void swapAdjNodes(List **, Node **, Node **);
 void printList(List *, int);
@@ -68,13 +68,14 @@ int main(int argc, char *argv[]) {
   boundedBuffer->count = 0;
   boundedBuffer->head = NULL;
   boundedBuffer->tail = NULL;
-  sem_init(&empty, 0, 0);
+  sem_init(&empty, 0, bBufferSize);
   sem_init(&full, 0, 0);
   sem_init(&mutex, 0, 1); 
 
   processCreator(argv[1]);
 
   printf("\nthis is the end of the main function: %d \n", getpid());
+  exit(0);
   return 0;
 }
 
@@ -136,17 +137,16 @@ void threadCreator(char **scannedWord) {
   char *fileExtensionPtr = NULL;
   pthread_attr_t workerThreadAttributes;
   pthread_attr_t senderThreadAttributes;
-  char *filePath = NULL;
+  char filePath[MAXLINESIZE];
   int numberThreadsCreated = 0;
   int numberThreadsInArray = 1;
   pthread_t *workerThreadIDArray = NULL;
   pthread_t *tempWorkerThreadIDArray = NULL;
   pthread_t senderThreadID;
+  // MapItem *lastWord = NULL;
  
   workerThreadIDArray = (pthread_t *)malloc(sizeof(pthread_t)*5);
   numberThreadsInArray *= 5;
-
-  filePath = (char *) malloc(sizeof(char)*MAXLINESIZE);
 
   strcat(filePath, *scannedWord);
   strcat(filePath, "/");
@@ -165,6 +165,8 @@ void threadCreator(char **scannedWord) {
       
       if(strcmp(fileExtensionPtr, ".txt") == 0) {
 
+        //Keeping track of all the thread IDs. Reallocating memory to the array if there are more threads
+        //than expected
         if(numberThreadsCreated == numberThreadsInArray){
           tempWorkerThreadIDArray = (pthread_t *)realloc(workerThreadIDArray, sizeof(pthread_t)*5);
           
@@ -182,11 +184,14 @@ void threadCreator(char **scannedWord) {
           numberThreadsInArray *= 5;
         }
 
-        workerThreadIDArray[numberThreadsCreated] = numberThreadsCreated; 
+        workerThreadIDArray[numberThreadsCreated] = numberThreadsCreated;
         strcat(filePath, directoryStruct->d_name);
+        printf("string path sending........: %s \n", (char *)filePath);
 
         pthread_attr_init(&workerThreadAttributes);
-        pthread_create(&workerThreadIDArray[numberThreadsCreated], &workerThreadAttributes, mapItemCreator, (void*)filePath);
+        pthread_create(&workerThreadIDArray[numberThreadsCreated], &workerThreadAttributes, mapItemCreator, filePath);
+        strcpy(filePath,"dgjshsfkdsf");
+        strcat(filePath, "/");
 
         numberThreadsCreated++;
 
@@ -201,8 +206,12 @@ void threadCreator(char **scannedWord) {
 
   for(int i = 0; i < numberThreadsCreated; i++){
     pthread_join(workerThreadIDArray[i], NULL);
-    printf("\nJOIN THREAD: %d\n", numberThreadsCreated);  
+    printf("\nJOIN THREAD: %d\n", numberThreadsCreated); 
   }
+
+  // strcpy(lastWord->word, "Finished");
+  // lastWord->count = -1;
+  // insertNodeAtTail((*lastWord));
 
   pthread_join(senderThreadID, NULL);
 
@@ -225,6 +234,9 @@ void * mapItemCreator(void *filePath) {
   itemToSend.count = 1;
   filePtr = fopen((char *)filePath, "r");
 
+        printf("string path 123: %s \n", (char *)filePath);
+
+
   if(filePtr == NULL) {
 
     printf("\n The file %s could not be opened in mapItemCreator(). Please try again!\n", (char *)filePath);
@@ -244,7 +256,7 @@ void * mapItemCreator(void *filePath) {
     sem_post(&mutex);
     sem_post(&full);
 
-    printf("Producer - WORD: %s is inserted\n", itemToSend.word);
+    printf("Producer - WORD: %s \n", itemToSend.word);
 
     //  if(insertNodeAtTail(itemToSend) == -1) {
     //    printf("\nBuffer is full...Cannot insert right now\n");
@@ -252,13 +264,13 @@ void * mapItemCreator(void *filePath) {
 
   }
 
-  printList(boundedBuffer, 0);
+  //printList(boundedBuffer, 0);
   pthread_exit(0);
 }
 
 void * mapItemSender(void * params) {
 
-  int tmp = 0;
+  int tmp = 6;
   int message_queue_id;
   key_t messageKey;
 
@@ -286,7 +298,9 @@ void * mapItemSender(void * params) {
     exit(1);
   }
 
-  while (tmp != -1) {
+  int counter = 0;
+
+  while(boundedBuffer->head->item.count != -1) {
 
     sem_wait(&full);
     sem_wait(&mutex);
@@ -297,15 +311,19 @@ void * mapItemSender(void * params) {
     //A data part that contains the data bytes of the message.
     //int msgsnd(int msqid, void *msgp, size_t msgsz, int msgflg);
 
-    if(msgsnd(message_queue_id, &boundedBuffer->head, MAXWORDSIZE, 0) == -1)
-      perror("Error in msgsnd");
+    printf("\n\t QID: %d, item: %s \n", message_queue_id, boundedBuffer->head->item.word);
 
-    tmp = removeNodeAtHead(boundedBuffer);
+    if(boundedBuffer->head->item.word != NULL && msgsnd(message_queue_id, &boundedBuffer->head->item, MAXWORDSIZE, 0) == -1)
+      perror("msgsnd error in mapItemSender");
+
+    printf("\n\t THIS IS COUNTER: %d\n", counter++);
+
+    removeNodeAtHead(boundedBuffer);
 
     sem_post(&mutex);
     sem_post(&empty);
 
-    if (tmp != -1) {
+    if (tmp == 0) {
       printf("\nSender Thread:  word: %s, tmp: %d is extracted.\n", boundedBuffer->head->item.word, tmp);
     }
 
@@ -355,33 +373,35 @@ int insertNodeAtTail(MapItem itemToInsert) {
   return 0;
 }
 
-int removeNodeAtHead(List * listToRemoveNode) {
+void removeNodeAtHead(List * listToRemoveNode) {
 
   Node *nodeToRemove = listToRemoveNode->head;
 
-  if(listToRemoveNode->count == 0 || nodeToRemove == NULL)
-    //cannot remove node. There aren't any
-    return -1;
+  if(nodeToRemove != NULL && nodeToRemove->item.word != NULL) {
 
-  // if(nodeToRemove == NULL)
-  //   //cannot remove node. Node not fund
-  //   return -2;
+    if(nodeToRemove->next == NULL) {
 
+      listToRemoveNode->tail = NULL;
+      listToRemoveNode->head = NULL;
+      
+      // free(nodeToRemove->item.word);
+      free(nodeToRemove);
 
-  listToRemoveNode->head = nodeToRemove->next;
-  nodeToRemove->next->prev = NULL;
-  nodeToRemove->next = NULL;
-  nodeToRemove->prev = NULL;
+    } else {
 
-  free(nodeToRemove->item.word);
-  //free(nodeToRemove->item);
-  free(nodeToRemove);
+      listToRemoveNode->head = nodeToRemove->next;
+      nodeToRemove->next->prev = NULL;
 
-  //Success removing the node
-  return 0;
+      // free(nodeToRemove->item.word);
+      free(nodeToRemove);
+
+    }
+
+  }
 
   listToRemoveNode->count --;
 
+  printf("\n \t ME LO COMI! \n");
 }
 
 void sortList(List *unsortedList) {
