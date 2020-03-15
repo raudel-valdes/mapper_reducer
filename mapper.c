@@ -68,9 +68,9 @@ int main(int argc, char *argv[]) {
   boundedBuffer->count = 0;
   boundedBuffer->head = NULL;
   boundedBuffer->tail = NULL;
-  sem_init(&empty, 0, 0);
-  sem_init(&full, 0, 0);
-  sem_init(&mutex, 0, 1); 
+  // sem_init(&empty, 0, bBufferSize);
+  // sem_init(&full, 0, 0);
+  // sem_init(&mutex, 0, 1); 
 
   processCreator(argv[1]);
 
@@ -236,13 +236,13 @@ void * mapItemCreator(void *filePath) {
 
     strcpy(itemToSend.word, scannedWord);
 
-    sem_wait(&empty);
-    sem_wait(&mutex);
+    // sem_wait(&empty);
+    // sem_wait(&mutex);
 
     insertNodeAtTail(itemToSend);
 
-    sem_post(&mutex);
-    sem_post(&full);
+    // sem_post(&mutex);
+    // sem_post(&full);
 
     printf("Producer - WORD: %s is inserted\n", itemToSend.word);
 
@@ -288,8 +288,8 @@ void * mapItemSender(void * params) {
 
   while (tmp != -1) {
 
-    sem_wait(&full);
-    sem_wait(&mutex);
+    // sem_wait(&full);
+    // sem_wait(&mutex);
 
     //used to send a message to the message queue specified by the msqid parameter. 
     //The *msgp parameter points to a user-defined buffer that must contain the 
@@ -302,8 +302,8 @@ void * mapItemSender(void * params) {
 
     tmp = removeNodeAtHead(boundedBuffer);
 
-    sem_post(&mutex);
-    sem_post(&empty);
+    // sem_post(&mutex);
+    // sem_post(&empty);
 
     if (tmp != -1) {
       printf("\nSender Thread:  word: %s, tmp: %d is extracted.\n", boundedBuffer->head->item.word, tmp);
