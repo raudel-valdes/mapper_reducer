@@ -1,0 +1,31 @@
+int message_queue_id;
+  key_t key;
+  MapItem mRecieved;
+  int msgrcvResponse = 0;
+
+  if ((key = ftok("mapper.c",1)) == -1) {
+    perror("ftok");
+    exit(1);
+  }
+  if ((message_queue_id = msgget(key, 0444)) == -1) {
+      perror("msgget 1");
+      exit(1);
+  }
+  while (msgrcv(message_queue_id, &mRecieved, MAXWORDSIZE, 0, 0) != -1){
+      printf("empty\n");
+      printf("\nRECEIVED: %s : %d", mRecieved.word, mRecieved.count); 
+      //addMessages(messagesList,mRecieved);
+  }
+  
+  
+  if(msgrcvResponse == -1) { 
+    perror("msgrcv");
+    exit(1);
+  }
+printf("\nhere\n");
+ // printList(messagesList,0);
+  // Deallocate message queue
+  // if (msgctl(message_queue_id, IPC_RMID, NULL) == -1) {
+  //   perror("msgctl");
+  //   exit(1);
+  // }
