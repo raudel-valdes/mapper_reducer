@@ -13,7 +13,7 @@ echo Three tests will be performed and testing will take around 12 seconds...
 # sed 's,replace,'"$DIR"',' commandFile2.dat > commandFile2.txt
 # sed 's,replace,'"$DIR"',' commandFile3.dat > commandFile3.txt
 
-./mapper commandFile3_R.txt 10&
+./mapper commandFile3.txt 10&
 sleep 1
-./reducer student_out1.txt
+./reducer out.txt
 sleep 3
