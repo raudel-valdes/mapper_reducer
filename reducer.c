@@ -54,6 +54,7 @@ int main(int argc, char * argv[]){
   int message_queue_id;
   key_t key;
   MapItem mRecieved;
+  mRecieved.count = 0;
   //int msgrcvResponse = 0;
   messagesList= (List *)malloc(sizeof(List));
 
@@ -68,7 +69,7 @@ int main(int argc, char * argv[]){
   }
 
   int counter = 0;
-  while(counter < 64){
+  while(mRecieved.count != -1){
   printf("\n\n");
    if (msgrcv(message_queue_id, &mRecieved, MAXWORDSIZE, 0, 0) == -1) {
     perror("msgrcv");
