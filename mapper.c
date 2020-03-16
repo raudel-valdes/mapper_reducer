@@ -269,13 +269,13 @@ void * mapItemCreator(void *filePath) {
     strcpy(itemToSend.word, scannedWord);
     itemToSend.count = 1;
 
-    // sem_wait(&empty);
-    // sem_wait(&mutex);
+    sem_wait(&empty);
+    sem_wait(&mutex);
 
     insertNodeAtTail(boundedBuffer , itemToSend);
 
-    // sem_post(&mutex);
-    // sem_post(&full);
+    sem_post(&mutex);
+    sem_post(&full);
 
     printf("\nProducer - WORD: %s \n", itemToSend.word);
 
@@ -315,8 +315,8 @@ void * mapItemSender(void * params) {
 
   while(boundedBuffer->head->item.count != -1) {
 
-    // sem_wait(&full);
-    // sem_wait(&mutex);
+    sem_wait(&full);
+    sem_wait(&mutex);
 
     //used to send a message to the message queue specified by the msqid parameter. 
     //The *msgp parameter points to a user-defined buffer that must contain the 
@@ -331,8 +331,8 @@ void * mapItemSender(void * params) {
     //printf("\nRECEIVED: %s : %d", boundedBuffer->head->item.word, boundedBuffer->head->item.count);
     removeNodeAtHead(boundedBuffer);
 
-    // sem_post(&mutex);
-    // sem_post(&empty);
+    sem_post(&mutex);
+    sem_post(&empty);
 
   }
   
