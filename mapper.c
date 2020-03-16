@@ -216,7 +216,7 @@ void threadCreator(char **scannedWord) {
         pthread_attr_init(&workerThreadAttributes);
 
         printf("\nPATH: %s\n", filePathItem.word);
-        pthread_create(&workerThreadIDArray[numberThreadsCreated], &workerThreadAttributes, mapItemCreator, filePathItem.word);
+        pthread_create(&workerThreadIDArray[numberThreadsCreated], &workerThreadAttributes, mapItemCreator, filePathList->tail->item.word);
 
         free(filePath);
 
