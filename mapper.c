@@ -109,8 +109,11 @@ void processCreator(char *cmdFile) {
   }
 
   while(fscanf(commandFilePtr, "%ms", &scannedWord) != EOF) {
+    printf("\nScanned word inside of processCreator: %s", scannedWord);
 
     processID = fork();
+
+    printf("\nprocessID inside of processCreator: %d \n", getpid());
 
     if (processID < 0) {
       printf("Fork Failed\n");
@@ -123,8 +126,6 @@ void processCreator(char *cmdFile) {
 
     childPCount++;
 
-    printf("\nChild ID: %d - Parent ID: %d \n", getpid(), getppid());
-    printf("\nEnd of the processCreator while loop\n");
   }
 
   if(processID != 0) {
@@ -213,6 +214,8 @@ void threadCreator(char **scannedWord) {
         insertNodeAtTail(filePathList, filePathItem);
 
         pthread_attr_init(&workerThreadAttributes);
+
+        printf("\nPATH: %s\n", filePathItem.word);
         pthread_create(&workerThreadIDArray[numberThreadsCreated], &workerThreadAttributes, mapItemCreator, filePathItem.word);
 
         free(filePath);
@@ -233,10 +236,6 @@ void threadCreator(char **scannedWord) {
     printf("\nJOIN THREAD: %d\n", numberThreadsCreated); 
   }
 
-  // strcpy(lastWord->word, "Finished");
-  // lastWord->count = -1;
-  // insertNodeAtTail((*lastWord));
-
   pthread_join(senderThreadID, NULL);
 
   printf("\nThis is the # of nodes in dbll: %d\n", boundedBuffer->count);
@@ -256,6 +255,8 @@ void * mapItemCreator(void *filePath) {
   itemToSend.count = 1;
   filePtr = fopen((char *)filePath, "r");
 
+  printf("\nPATH 2: %s\n", (char*)filePath);
+
   if(filePtr == NULL) {
 
     printf("\n The file %s could not be opened in mapItemCreator(). Please try again!\n", (char *)filePath);
@@ -266,14 +267,15 @@ void * mapItemCreator(void *filePath) {
   while(fscanf(filePtr, "%ms", &scannedWord) != EOF) {
 
     strcpy(itemToSend.word, scannedWord);
+    itemToSend.count = 1;
 
-    sem_wait(&empty);
-    sem_wait(&mutex);
+    // sem_wait(&empty);
+    // sem_wait(&mutex);
 
     insertNodeAtTail(boundedBuffer , itemToSend);
 
-    sem_post(&mutex);
-    sem_post(&full);
+    // sem_post(&mutex);
+    // sem_post(&full);
 
     printf("\nProducer - WORD: %s \n", itemToSend.word);
 
@@ -283,8 +285,7 @@ void * mapItemCreator(void *filePath) {
 }
 
 void * mapItemSender(void * params) {
-
-  int tmp = 6;
+//printf("BOBO!\n");
   int message_queue_id;
   key_t messageKey;
 
@@ -314,25 +315,24 @@ void * mapItemSender(void * params) {
 
   while(boundedBuffer->head->item.count != -1) {
 
-    sem_wait(&full);
-    sem_wait(&mutex);
+    // sem_wait(&full);
+    // sem_wait(&mutex);
 
     //used to send a message to the message queue specified by the msqid parameter. 
     //The *msgp parameter points to a user-defined buffer that must contain the 
     //following: A field of type long int that specifies the type of the message. 
     //A data part that contains the data bytes of the message.
     //int msgsnd(int msqid, void *msgp, size_t msgsz, int msgflg);
+
+    printf("\n\tConsumer - WORD: %s \n", boundedBuffer->head->item.word);
+
     if(boundedBuffer->head->item.word != NULL && msgsnd(message_queue_id, &boundedBuffer->head->item, MAXWORDSIZE, 0) == -1)
       perror("msgsnd error in mapItemSender");
 
     removeNodeAtHead(boundedBuffer);
 
-    sem_post(&mutex);
-    sem_post(&empty);
-
-    if (tmp == 0) {
-      printf("\nSender Thread:  word: %s, tmp: %d is extracted.\n", boundedBuffer->head->item.word, tmp);
-    }
+    // sem_post(&mutex);
+    // sem_post(&empty);
 
   }
   
@@ -381,6 +381,7 @@ int insertNodeAtTail(List *listToGrow,MapItem itemToInsert) {
 }
 
 void removeNodeAtHead(List * listToRemoveNode) {
+  printf("\nRemove Func: %s\n", listToRemoveNode->head->item.word);
 
   Node *nodeToRemove = listToRemoveNode->head;
 
