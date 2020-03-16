@@ -17,7 +17,7 @@
 #define MAXLINESIZE 1024
 
 typedef struct MapItem {
-  char word[MAXWORDSIZE];
+  char word[MAXLINESIZE];
   int count;
 } MapItem;
 
@@ -35,23 +35,27 @@ typedef struct List {
 
 // Function declaration
 
-int insertNodeAtTail(MapItem);
+int insertNodeAtTail(List *, MapItem);
 int removeNodeAtHead(List *);
 void swapAdjNodes(List **, Node **, Node **);
 void sortList(List *);
 void printList(List *, int);
 void destroyList(List *);
+bool qualifyMessage(List*, MapItem);
+void addMessages(List*, MapItem);
+void saveOutput(List *, char* );
 
 // Globals
 
 List *messagesList;
 
-
+// MAIN function
 int main(int argc, char * argv[]){
   int message_queue_id;
   key_t key;
   MapItem mRecieved;
-  int msgrcvResponse = 0;
+  //int msgrcvResponse = 0;
+  messagesList= (List *)malloc(sizeof(List));
 
   if ((key = ftok("mapper.c",1)) == -1) {
     perror("ftok");
@@ -59,39 +63,38 @@ int main(int argc, char * argv[]){
   }
 
   if ((message_queue_id = msgget(key, 0444)) == -1) {
-    perror("msgget 1");
+    perror("msgget");
     exit(1);
   }
 
-  // msgrcvResponse = msgrcv(message_queue_id, &mRecieved, MAXWORDSIZE, 0, 0);
+  int counter = 0;
+  while(counter < 64){
+  printf("\n\n");
+   if (msgrcv(message_queue_id, &mRecieved, MAXWORDSIZE, 0, 0) == -1) {
+    perror("msgrcv");
+    exit(1);
+    }
+    counter++;
+
+    printf("\nRECEIVED: %s : %d", mRecieved.word, mRecieved.count);
+    addMessages(messagesList,mRecieved);
+   
+  }
+  printf("printing list \n");
+  sortList(messagesList);
   
-  // if(msgrcvResponse == -1) { 
-  //   perror("msgrcv");
-  //   exit(1);
-  // }
+  saveOutput(messagesList, argv[1]);
 
-  // printf("\nRECEIVED: %s : %d", mRecieved.word, mRecieved.count); 
-
-  while ((msgrcvResponse = msgrcv(message_queue_id, &mRecieved, MAXWORDSIZE, 0, 0)) != -1){
-    if(msgrcvResponse == -1) { 
-      perror("msgrcv");
+   // THIS IS USED TO ERASE THE WHOLE MESSAGE QUEUE. NOT A SINGLE MESSAGE!!
+    if (msgctl(message_queue_id, IPC_RMID, NULL) == -1) {
+      perror("msgctl");
       exit(1);
     }
-    printf("\nRECEIVED: %s : %d", mRecieved.word, mRecieved.count); 
-  }
-  
-  
-
-  //THIS IS USED TO ERASE THE WHOLE MESSAGE QUEUE. NOT A SINGLE MESSAGE!!
-  // if (msgctl(message_queue_id, IPC_RMID, NULL) == -1) {
-  //   perror("msgctl");
-  //   exit(1);
-  // }
-
 }
 
-int insertNodeAtTail(MapItem itemToInsert) {
+int insertNodeAtTail(List *messagesList, MapItem itemToInsert) {
 
+  itemToInsert.count = 1;
   Node *nextTailNode = malloc(sizeof(Node));
 
   nextTailNode->item = itemToInsert;
@@ -232,7 +235,6 @@ void destroyList(List *listToDestroy) {
   }
 }
 
-
 bool qualifyMessage(List* lt, MapItem msg){
     // search for the key, if found increment counter and return true
     Node *node = lt->head;
@@ -250,10 +252,33 @@ bool qualifyMessage(List* lt, MapItem msg){
 void addMessages(List* list, MapItem msg){
     
 	if(!qualifyMessage(list, msg)){
-        insertNodeAtTail(msg);
+        insertNodeAtTail(list, msg);
 	}
 	// As a reference: if memory leaks, check for the node creation,
     // it may be the case that the insertion fails and the memory
     // allocated for the node is being not deallocated
     // If needed add a <else> clause to destroy the node
+}
+
+void saveOutput(List *list, char* file){
+	FILE *out;
+	// Flag 'w' open the file in 'write mode'
+	out = fopen(file,"w");
+
+	if(out == NULL){
+		printf("File can't be opened");
+		return;
+    }
+	Node *cursor=list->head;
+	while(cursor!=NULL){
+		if(cursor->next==NULL){
+			// If is the last line do not insert a new line
+			fprintf(out,"%s:%d", cursor->item.word, cursor->item.count);
+		}
+		else{
+			fprintf(out,"%s:%d\n", cursor->item.word, cursor->item.count);
+		}
+		cursor=cursor->next;
+	}
+	fclose(out);
 }

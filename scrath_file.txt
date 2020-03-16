@@ -29,3 +29,24 @@ printf("\nhere\n");
   //   perror("msgctl");
   //   exit(1);
   // }
+
+
+
+
+  // msgrcvResponse = msgrcv(message_queue_id, &mRecieved, MAXWORDSIZE, 0, 0);
+  
+  // if(msgrcvResponse == -1) { 
+  //   perror("msgrcv");
+  //   exit(1);
+  // }
+
+  // printf("\nRECEIVED: %s : %d", mRecieved.word, mRecieved.count); 
+
+  /* while ((msgrcvResponse = msgrcv(message_queue_id, &mRecieved, MAXWORDSIZE, 0, 0)) != -1){
+    if(msgrcvResponse == -1) { 
+      perror("msgrcv");
+      exit(1);
+    }
+    printf("\nRECEIVED: %s : %d", mRecieved.word, mRecieved.count);
+    addMessages(messagesList,mRecieved);
+  } */

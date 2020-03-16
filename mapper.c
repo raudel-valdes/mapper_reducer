@@ -266,7 +266,7 @@ void * mapItemCreator(void *filePath) {
   while(fscanf(filePtr, "%ms", &scannedWord) != EOF) {
 
     strcpy(itemToSend.word, scannedWord);
-
+    itemToSend.count = 1;
     sem_wait(&empty);
     sem_wait(&mutex);
 
@@ -324,7 +324,7 @@ void * mapItemSender(void * params) {
     //int msgsnd(int msqid, void *msgp, size_t msgsz, int msgflg);
     if(boundedBuffer->head->item.word != NULL && msgsnd(message_queue_id, &boundedBuffer->head->item, MAXWORDSIZE, 0) == -1)
       perror("msgsnd error in mapItemSender");
-
+    //printf("\nRECEIVED: %s : %d", boundedBuffer->head->item.word, boundedBuffer->head->item.count);
     removeNodeAtHead(boundedBuffer);
 
     sem_post(&mutex);
