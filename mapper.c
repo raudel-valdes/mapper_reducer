@@ -98,7 +98,6 @@ void processCreator(char *cmdFile) {
   char *scannedWord = NULL;
   pid_t processID;
   int childPCount = 0;
-  MapItem lastWord = NULL;
 
   commandFilePtr = fopen(cmdFile, "r");
 
@@ -137,11 +136,7 @@ void processCreator(char *cmdFile) {
     }
   }
 
-  printf("\nThis is the end of the processcreator: %d \n", getpid());
-  strcpy(lastWord.word, "Finished");
-  lastWord.count = -1;
-  insertNodeAtTail(boundedBuffer, lastWord);
-
+   printf("\nThis is the end of the processcreator: %d \n", getpid());
 }
 
 void threadCreator(char **scannedWord) {
@@ -162,6 +157,8 @@ void threadCreator(char **scannedWord) {
   pthread_t *workerThreadIDArray = NULL;
   pthread_t *tempWorkerThreadIDArray = NULL;
   pthread_t senderThreadID;
+
+  MapItem lastWord;
 
   workerThreadIDArray = (pthread_t *)malloc(sizeof(pthread_t)*5);
 
@@ -240,10 +237,21 @@ void threadCreator(char **scannedWord) {
     printf("\nJOIN THREAD: %d\n", numberThreadsCreated); 
   }
 
+
+  printf("\n\n\t RED! \n\n");
+
+  strcpy(lastWord.word, "osvaldo");
+  lastWord.count = -1;
+    printf("\n\n\t RED2! \n\n");
+
+  insertNodeAtTail(boundedBuffer, lastWord);
+    printf("\n\n\t RED4! \n\n");
+
   pthread_join(senderThreadID, NULL);
 
-  printf("\nThis is the # of nodes in dbll: %d\n", boundedBuffer->count);
 
+  printf("\nThis is the # of nodes in dbll: %d\n", boundedBuffer->count);
+  
   closedir(threadDirPtr);
 
   exit(0);
@@ -289,7 +297,6 @@ void * mapItemCreator(void *filePath) {
 }
 
 void * mapItemSender(void * params) {
-//printf("BOBO!\n");
   int message_queue_id;
   key_t messageKey;
 
@@ -298,9 +305,6 @@ void * mapItemSender(void * params) {
   //with the same id value. If ftok() is called with different id values 
   //or path points to different files on the same file system, it returns different keys.
   //key_t ftok(const char *path, int id);
-
-  //We must create a thread that becomes the sender to the bounded buffer
-  //we must implement the semaphores
   if ((messageKey = ftok("mapper.c", 1)) == -1) {
     perror("ftok");
     exit(1);
@@ -317,6 +321,7 @@ void * mapItemSender(void * params) {
     exit(1);
   }
 
+
   while(boundedBuffer->head->item.count != -1) {
 
     // sem_wait(&full);
@@ -328,7 +333,7 @@ void * mapItemSender(void * params) {
     //A data part that contains the data bytes of the message.
     //int msgsnd(int msqid, void *msgp, size_t msgsz, int msgflg);
 
-    printf("\n\tConsumer - WORD: %s \n", boundedBuffer->head->item.word);
+    // printf("\n\tConsumer - WORD: %s \n", boundedBuffer->head->item.word);
 
     if(boundedBuffer->head->item.word != NULL && msgsnd(message_queue_id, &boundedBuffer->head->item, MAXWORDSIZE, 0) == -1)
       perror("msgsnd error in mapItemSender");
@@ -338,7 +343,13 @@ void * mapItemSender(void * params) {
     // sem_post(&mutex);
     // sem_post(&empty);
 
+    printf("\nWORD: %s - Count: %d is extracted.\n", boundedBuffer->head->item.word, boundedBuffer->head->item.count);
   }
+
+  if(boundedBuffer->head->item.word != NULL && msgsnd(message_queue_id, &boundedBuffer->head->item, MAXWORDSIZE, 0) == -1)
+  perror("msgsnd error in mapItemSender");
+
+  removeNodeAtHead(boundedBuffer);
   
   pthread_exit(0);
 }
@@ -532,7 +543,7 @@ void destroyList(List *listToDestroy) {
 
     free(nodeToDestroy->item.word);
     //free(nodeToDestroy->item);
-    free(nodeToDestroy);
+    //free(nodeToDestroy);
 
     nodeToDestroy = tempNode;
 

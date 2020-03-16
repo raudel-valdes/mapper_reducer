@@ -64,12 +64,12 @@ int main(int argc, char * argv[]){
   }
 
   if ((message_queue_id = msgget(key, 0444)) == -1) {
-    perror("msgget");
+    perror("msgget Reducer");
     exit(1);
   }
 
   int counter = 0;
-  while(mRecieved.count != -1){
+  while(strcmp(mRecieved.word, "osvaldo") != 0){
   printf("\n\n");
    if (msgrcv(message_queue_id, &mRecieved, MAXWORDSIZE, 0, 0) == -1) {
     perror("msgrcv");
@@ -77,7 +77,7 @@ int main(int argc, char * argv[]){
     }
     counter++;
 
-    printf("\nRECEIVED: %s : %d", mRecieved.word, mRecieved.count);
+    printf("\nREDUCED: %s : %d", mRecieved.word, mRecieved.count);
     addMessages(messagesList,mRecieved);
    
   }
@@ -86,11 +86,11 @@ int main(int argc, char * argv[]){
   
   saveOutput(messagesList, argv[1]);
 
-   // THIS IS USED TO ERASE THE WHOLE MESSAGE QUEUE. NOT A SINGLE MESSAGE!!
-    if (msgctl(message_queue_id, IPC_RMID, NULL) == -1) {
-      perror("msgctl");
-      exit(1);
-    }
+  //  // THIS IS USED TO ERASE THE WHOLE MESSAGE QUEUE. NOT A SINGLE MESSAGE!!
+  //   if (msgctl(message_queue_id, IPC_RMID, NULL) == -1) {
+  //     perror("msgctl");
+  //     exit(1);
+  //   }
 }
 
 int insertNodeAtTail(List *messagesList, MapItem itemToInsert) {
@@ -251,10 +251,13 @@ bool qualifyMessage(List* lt, MapItem msg){
 }
 
 void addMessages(List* list, MapItem msg){
-    
-	if(!qualifyMessage(list, msg)){
+  if(strcmp(msg.word,"osvaldo")==0){
+    return;
+  }
+	else if(!qualifyMessage(list, msg)){
         insertNodeAtTail(list, msg);
 	}
+  
 	// As a reference: if memory leaks, check for the node creation,
     // it may be the case that the insertion fails and the memory
     // allocated for the node is being not deallocated
