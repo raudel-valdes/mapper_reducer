@@ -17,8 +17,8 @@
 #define MAXLINESIZE 1024
 
 typedef struct MapItem {
-  char word[MAXLINESIZE];
   int count;
+  char word[MAXLINESIZE];
 } MapItem;
 
 typedef struct Node{
@@ -54,8 +54,7 @@ int main(int argc, char * argv[]){
   int message_queue_id;
   key_t key;
   MapItem mRecieved;
-  mRecieved.count = 0;
-  //int msgrcvResponse = 0;
+
   messagesList= (List *)malloc(sizeof(List));
 
   if ((key = ftok("mapper.c",1)) == -1) {
@@ -67,25 +66,27 @@ int main(int argc, char * argv[]){
     perror("msgget Reducer");
     exit(1);
   }
-
-  int counter = 0;
-  while(strcmp(mRecieved.word, "osvaldo") != 0){
-  printf("\n\n");
+int counter = 0;
+  // while(mRecieved.count != -1){
+  while(counter != 64){
    if (msgrcv(message_queue_id, &mRecieved, MAXWORDSIZE, 0, 0) == -1) {
     perror("msgrcv");
     exit(1);
-    }
-    counter++;
-
+  }
+   
     printf("\nREDUCED: %s : %d", mRecieved.word, mRecieved.count);
     addMessages(messagesList,mRecieved);
+
+    counter++;
    
   }
-  printf("printing list \n");
-  sortList(messagesList);
-  
-  saveOutput(messagesList, argv[1]);
 
+  sortList(messagesList);
+  saveOutput(messagesList, argv[1]);
+  destroyList(messagesList);
+  free(messagesList);
+
+  printf("\n\t Reached the end of reducer\n");
   //  // THIS IS USED TO ERASE THE WHOLE MESSAGE QUEUE. NOT A SINGLE MESSAGE!!
   //   if (msgctl(message_queue_id, IPC_RMID, NULL) == -1) {
   //     perror("msgctl");
@@ -95,7 +96,6 @@ int main(int argc, char * argv[]){
 
 int insertNodeAtTail(List *messagesList, MapItem itemToInsert) {
 
-  itemToInsert.count = 1;
   Node *nextTailNode = malloc(sizeof(Node));
 
   nextTailNode->item = itemToInsert;
@@ -229,7 +229,6 @@ void destroyList(List *listToDestroy) {
     
   while(nodeToDestroy != NULL) {
     tempNode = nodeToDestroy->next;
-    free(nodeToDestroy->item.word);
     free(nodeToDestroy);
     nodeToDestroy = tempNode;
 

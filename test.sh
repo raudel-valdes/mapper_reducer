@@ -2,6 +2,7 @@
 # This is a comment
 
 ./clean_os.sh
+clear
 rm *~
 make clean
 make

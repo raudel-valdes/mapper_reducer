@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <dirent.h>
 #include <unistd.h>
+#include <stdbool.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <pthread.h>
@@ -17,9 +18,10 @@
 #define MAXLINESIZE 1024
 
 typedef struct MapItem {
-  // char word[MAXWORDSIZE];
-  char word[MAXLINESIZE];
+
   int count;
+  char word[MAXWORDSIZE];
+
 } MapItem;
 
 typedef struct Node{
@@ -45,7 +47,7 @@ sem_t mutex;
 List *boundedBuffer;
 List *filePathList;
 
-int insertNodeAtTail(List *, MapItem);
+void insertNodeAtTail(List *, MapItem);
 void removeNodeAtHead(List *);
 void sortList(List *);
 void swapAdjNodes(List **, Node **, Node **);
@@ -92,8 +94,6 @@ int main(int argc, char *argv[]) {
 
 void processCreator(char *cmdFile) {
 
-  printf("\nThis is the cmdFile in processCreator: %s \n",cmdFile);
-
   FILE *commandFilePtr = NULL;
   char *scannedWord = NULL;
   pid_t processID;
@@ -102,14 +102,11 @@ void processCreator(char *cmdFile) {
   commandFilePtr = fopen(cmdFile, "r");
 
   if(commandFilePtr == NULL) {
-
-    printf("The file %s could not be open in processCreator. Please try again!\n", cmdFile);
-    exit(EXIT_FAILURE);
-
+    perror("could not open file\n");
+    exit(1);
   }
 
   while(fscanf(commandFilePtr, "%ms", &scannedWord) != EOF) {
-    printf("\nScanned word inside of processCreator: %s", scannedWord);
 
     processID = fork();
 
@@ -130,13 +127,12 @@ void processCreator(char *cmdFile) {
 
   if(processID != 0) {
     for(int i = 0; i < childPCount; i++) {
-      printf("\nNumber of processes per parent: %d - %d \n", i ,getpid());
       printf("\nParent Waiting: %d \n", getpid());
       wait(NULL);
     }
   }
 
-   printf("\nThis is the end of the processcreator: %d \n", getpid());
+  printf("\n\n \tMain Process returned!!: %d \n\n", getpid());
 }
 
 void threadCreator(char **scannedWord) {
@@ -150,25 +146,25 @@ void threadCreator(char **scannedWord) {
   MapItem filePathItem;
 
   //thread related variables
-  pthread_attr_t workerThreadAttributes;
-  pthread_attr_t senderThreadAttributes;
+  // pthread_attr_t workerThreadAttributes;
+  // pthread_attr_t senderThreadAttributes;
   int numberThreadsCreated = 0;
-  int numberThreadsInArray = 5;
+  int sizeOfThreadArray = 5;
   pthread_t *workerThreadIDArray = NULL;
-  pthread_t *tempWorkerThreadIDArray = NULL;
+  void * retvals = NULL;
   pthread_t senderThreadID;
+  void * senderThreadRetval[1];
 
   MapItem lastWord;
 
   workerThreadIDArray = (pthread_t *)malloc(sizeof(pthread_t)*5);
+  retvals = (void *)malloc(sizeof(void *)*5);
 
   threadDirPtr = opendir((*scannedWord));
 
   if(!threadDirPtr) {
-
-    printf("\nThe directory %s could not be opened in threadCreator. Please try again!", (*scannedWord));
-    exit(EXIT_FAILURE);
-
+    perror("Could not open directory \n");
+    exit(1);
   }
 
   while((directoryStruct = readdir(threadDirPtr)) != NULL) {
@@ -179,25 +175,22 @@ void threadCreator(char **scannedWord) {
 
         //Keeping track of all the thread IDs. Reallocating memory to the array if there are more threads
         //than expected
-        if(numberThreadsCreated == numberThreadsInArray){
-          tempWorkerThreadIDArray = (pthread_t *)realloc(workerThreadIDArray, sizeof(pthread_t)*5);
+        if(numberThreadsCreated == sizeOfThreadArray) {
           
-          if(tempWorkerThreadIDArray == NULL) {
+          workerThreadIDArray = (pthread_t *)realloc(workerThreadIDArray, sizeof(pthread_t)*5);
+          retvals = (void *)realloc(retvals, sizeof(void)*5);
+
+          if(workerThreadIDArray == NULL) {
 
             perror("realloc returned NULL");
             exit(1);
 
-          } else {
-
-            workerThreadIDArray = tempWorkerThreadIDArray;
-
           }
 
-          numberThreadsInArray *= 5;
+          sizeOfThreadArray *= 5;
         }
 
         workerThreadIDArray[numberThreadsCreated] = numberThreadsCreated;
-
 
         filePath = (char *)malloc(sizeof(char)*MAXLINESIZE);
         strcat(filePath, *scannedWord);
@@ -214,13 +207,14 @@ void threadCreator(char **scannedWord) {
         strcpy(filePathItem.word, filePath);
         insertNodeAtTail(filePathList, filePathItem);
 
-        pthread_attr_init(&workerThreadAttributes);
+        // pthread_attr_init(&workerThreadAttributes);
 
-        printf("\nPATH: %s\n", filePathItem.word);
-        pthread_create(&workerThreadIDArray[numberThreadsCreated], &workerThreadAttributes, mapItemCreator, filePathList->tail->item.word);
+        if (pthread_create(&workerThreadIDArray[numberThreadsCreated], NULL, mapItemCreator, filePathList->tail->item.word)) {
+          perror("Cannot create thread\n");
+          exit(1);
+        }
 
         free(filePath);
-
         numberThreadsCreated++;
 
       }
@@ -229,28 +223,34 @@ void threadCreator(char **scannedWord) {
 
   }
 
-  pthread_attr_init(&senderThreadAttributes);
-  pthread_create(&senderThreadID, &senderThreadAttributes, mapItemSender, NULL);
+  // pthread_attr_init(&senderThreadAttributes);
+
+  pthread_create(&senderThreadID, NULL, mapItemSender, NULL);
 
   for(int i = 0; i < numberThreadsCreated; i++){
-    pthread_join(workerThreadIDArray[i], NULL);
-    printf("\nJOIN THREAD: %d\n", numberThreadsCreated); 
+
+    if (pthread_join(workerThreadIDArray[i], &retvals[i]) != 0) {
+      perror("\nCannot join thread\n");
+      exit(1);
+    }
   }
 
+    sem_wait(&empty);
+    sem_wait(&mutex);
 
-  printf("\n\n\t RED! \n\n");
+    strcpy(lastWord.word, "END OPERATIONS!");
+    lastWord.count = -1;
 
-  strcpy(lastWord.word, "osvaldo");
-  lastWord.count = -1;
-    printf("\n\n\t RED2! \n\n");
+    insertNodeAtTail(boundedBuffer, lastWord);
 
-  insertNodeAtTail(boundedBuffer, lastWord);
-    printf("\n\n\t RED4! \n\n");
-
-  pthread_join(senderThreadID, NULL);
+    sem_post(&mutex);
+    sem_post(&full);
 
 
-  printf("\nThis is the # of nodes in dbll: %d\n", boundedBuffer->count);
+  if (pthread_join(senderThreadID, &senderThreadRetval[0]) != 0) {
+    perror("\nCannot join thread\n");
+    exit(1);
+  }
   
   closedir(threadDirPtr);
 
@@ -267,13 +267,9 @@ void * mapItemCreator(void *filePath) {
   itemToSend.count = 1;
   filePtr = fopen((char *)filePath, "r");
 
-  printf("\nPATH 2: %s\n", (char*)filePath);
-
   if(filePtr == NULL) {
-
     printf("\n The file %s could not be opened in mapItemCreator(). Please try again!\n", (char *)filePath);
-    exit(EXIT_FAILURE);
-
+    exit(1);
   }
   
   while(fscanf(filePtr, "%ms", &scannedWord) != EOF) {
@@ -281,22 +277,32 @@ void * mapItemCreator(void *filePath) {
     strcpy(itemToSend.word, scannedWord);
     itemToSend.count = 1;
 
-    // sem_wait(&empty);
-    // sem_wait(&mutex);
+    printf("\n\n//////////////////PRODUCER/////////////////\n");
 
-    insertNodeAtTail(boundedBuffer , itemToSend);
+    sem_wait(&empty);
 
-    // sem_post(&mutex);
-    // sem_post(&full);
+    sem_wait(&mutex);
 
-    printf("\nProducer - WORD: %s \n", itemToSend.word);
+    insertNodeAtTail(boundedBuffer, itemToSend);
+    printf("\nProducer - WORD: %s, PID: %d\n", itemToSend.word, getpid());
+
+      sem_post(&mutex);
+
+    int sem_value_mutex_2=0;
+    sem_getvalue(&mutex,&sem_value_mutex_2);
+
+    sem_post(&full);
 
   }
-
+  
+  printf("\n\n\tTerminating Producer Thread!! \n\n");
   pthread_exit(0);
 }
 
 void * mapItemSender(void * params) {
+
+  printf("\n\tConsumer Started!\n");
+
   int message_queue_id;
   key_t messageKey;
 
@@ -320,12 +326,8 @@ void * mapItemSender(void * params) {
     perror("msgget");
     exit(1);
   }
-
-
-  while(boundedBuffer->head->item.count != -1) {
-
-    // sem_wait(&full);
-    // sem_wait(&mutex);
+  
+  while(boundedBuffer->head != NULL && boundedBuffer->head->item.count != -1) {
 
     //used to send a message to the message queue specified by the msqid parameter. 
     //The *msgp parameter points to a user-defined buffer that must contain the 
@@ -333,35 +335,41 @@ void * mapItemSender(void * params) {
     //A data part that contains the data bytes of the message.
     //int msgsnd(int msqid, void *msgp, size_t msgsz, int msgflg);
 
-    // printf("\n\tConsumer - WORD: %s \n", boundedBuffer->head->item.word);
+
+
+    printf("\n\n//////////////////CONSUMER/////////////////\n");
+
+    sem_wait(&full);
+    sem_wait(&mutex);
 
     if(boundedBuffer->head->item.word != NULL && msgsnd(message_queue_id, &boundedBuffer->head->item, MAXWORDSIZE, 0) == -1)
       perror("msgsnd error in mapItemSender");
 
     removeNodeAtHead(boundedBuffer);
+    printf("\nCONSUMER: WORD: %s, PID: %d is extracted.\n", boundedBuffer->head->item.word, getpid());
 
-    // sem_post(&mutex);
-    // sem_post(&empty);
+    sem_post(&mutex);
+    sem_post(&empty);
 
-    printf("\nWORD: %s - Count: %d is extracted.\n", boundedBuffer->head->item.word, boundedBuffer->head->item.count);
   }
 
   if(boundedBuffer->head->item.word != NULL && msgsnd(message_queue_id, &boundedBuffer->head->item, MAXWORDSIZE, 0) == -1)
-  perror("msgsnd error in mapItemSender");
+    perror("msgsnd error in mapItemSender");
 
-  removeNodeAtHead(boundedBuffer);
+  //NOTE SURE WHY WE NEED THIS ONE AS OF NOW. COMMENTING IT OUT FOR TESTING
+  //removeNodeAtHead(boundedBuffer);
   
+
+    printf("\n\n\tTerminating Consumer Thread!! \n\n");
   pthread_exit(0);
 }
 
-int insertNodeAtTail(List *listToGrow,MapItem itemToInsert) {
-
-  // if(boundedBuffer->count == bBufferSize)
-  //   return -1;
+void insertNodeAtTail(List *listToGrow,MapItem itemToInsert) {
 
   Node *nextTailNode = malloc(sizeof(Node));
 
-  nextTailNode->item = itemToInsert;
+  strcpy(nextTailNode->item.word, itemToInsert.word);
+  nextTailNode->item.count = itemToInsert.count;
 
   Node *currentHeadNode = boundedBuffer->head;
   Node *currentTailNode = boundedBuffer->tail;
@@ -390,13 +398,10 @@ int insertNodeAtTail(List *listToGrow,MapItem itemToInsert) {
   if (fill == bBufferSize) {
     fill = 0;
   }
-
-  //succesfully inserted node
-  return 0;
 }
 
 void removeNodeAtHead(List * listToRemoveNode) {
-  printf("\nRemove Func: %s\n", listToRemoveNode->head->item.word);
+  printf("\nREMOVENODEATHEAD: %s\n", listToRemoveNode->head->item.word);
 
   Node *nodeToRemove = listToRemoveNode->head;
 
@@ -404,25 +409,24 @@ void removeNodeAtHead(List * listToRemoveNode) {
 
     if(nodeToRemove->next == NULL) {
 
-      listToRemoveNode->tail = NULL;
-      listToRemoveNode->head = NULL;
-      
-      // free(nodeToRemove->item.word);
-      free(nodeToRemove);
+// **********************************************************
+// THE THING GIVING US TONS OF PROBLEMS THIS WHOLE TIME!!!!!
+//***********************************************************
+      // listToRemoveNode->tail = NULL;
+      // listToRemoveNode->head = NULL;
+
+      printf("\nTest 20\n");
 
     } else {
 
       listToRemoveNode->head = nodeToRemove->next;
       nodeToRemove->next->prev = NULL;
 
-      // free(nodeToRemove->item.word);
       free(nodeToRemove);
-
     }
 
+    listToRemoveNode->count --;
   }
-
-  listToRemoveNode->count --;
 }
 
 void sortList(List *unsortedList) {
@@ -541,10 +545,7 @@ void destroyList(List *listToDestroy) {
 
     tempNode = nodeToDestroy->next;
 
-    free(nodeToDestroy->item.word);
-    //free(nodeToDestroy->item);
-    //free(nodeToDestroy);
-
+    free(nodeToDestroy);
     nodeToDestroy = tempNode;
 
   }
