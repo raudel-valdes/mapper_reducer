@@ -66,9 +66,8 @@ int main(int argc, char * argv[]){
     perror("msgget Reducer");
     exit(1);
   }
-int counter = 0;
-  // while(mRecieved.count != -1){
-  while(counter != 64){
+
+  while(mRecieved.count != -1){
    if (msgrcv(message_queue_id, &mRecieved, MAXWORDSIZE, 0, 0) == -1) {
     perror("msgrcv");
     exit(1);
@@ -76,8 +75,6 @@ int counter = 0;
    
     printf("\nREDUCED: %s : %d", mRecieved.word, mRecieved.count);
     addMessages(messagesList,mRecieved);
-
-    counter++;
    
   }
 
@@ -250,7 +247,7 @@ bool qualifyMessage(List* lt, MapItem msg){
 }
 
 void addMessages(List* list, MapItem msg){
-  if(strcmp(msg.word,"osvaldo")==0){
+  if(msg.count == -1){
     return;
   }
 	else if(!qualifyMessage(list, msg)){

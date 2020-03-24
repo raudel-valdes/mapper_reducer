@@ -37,8 +37,6 @@ typedef struct List {
 } List;
 
 int bBufferSize = 0;
-int use  = 0;
-int fill = 0;
 
 sem_t empty;
 sem_t full;
@@ -69,7 +67,7 @@ int main(int argc, char *argv[]) {
 
   bBufferSize = atoi(argv[2]);
 
-  boundedBuffer = (List *) malloc(sizeof(List));
+  boundedBuffer = (List *)malloc(sizeof(List));
   filePathList = (List *)malloc(sizeof(List));
 
   boundedBuffer->count = 0;
@@ -86,6 +84,13 @@ int main(int argc, char *argv[]) {
 
   destroyList(filePathList);
   destroyList(boundedBuffer);
+
+  free(boundedBuffer);
+//***********************************************
+//FOR SOME REASON THE PROGRAM WON'T TERMINATE WITHOUT THIS
+// SEEMS LIKE IT LOOSED THE FILEPATH BEFORE TERMINATING
+//***********************************************
+  //free(filePathList);
 
   printf("\nthis is the end of the main function: %d \n", getpid());
 
@@ -132,6 +137,8 @@ void processCreator(char *cmdFile) {
     }
   }
 
+  free(scannedWord);
+
   printf("\n\n \tMain Process returned!!: %d \n\n", getpid());
 }
 
@@ -146,20 +153,19 @@ void threadCreator(char **scannedWord) {
   MapItem filePathItem;
 
   //thread related variables
-  // pthread_attr_t workerThreadAttributes;
-  // pthread_attr_t senderThreadAttributes;
+  pthread_attr_t workerThreadAttributes;
+  pthread_attr_t senderThreadAttributes;
   int numberThreadsCreated = 0;
   int sizeOfThreadArray = 5;
   pthread_t *workerThreadIDArray = NULL;
-  void * retvals = NULL;
+  void * retvals[1];
   pthread_t senderThreadID;
   void * senderThreadRetval[1];
 
   MapItem lastWord;
 
   workerThreadIDArray = (pthread_t *)malloc(sizeof(pthread_t)*5);
-  retvals = (void *)malloc(sizeof(void *)*5);
-
+  
   threadDirPtr = opendir((*scannedWord));
 
   if(!threadDirPtr) {
@@ -178,7 +184,6 @@ void threadCreator(char **scannedWord) {
         if(numberThreadsCreated == sizeOfThreadArray) {
           
           workerThreadIDArray = (pthread_t *)realloc(workerThreadIDArray, sizeof(pthread_t)*5);
-          retvals = (void *)realloc(retvals, sizeof(void)*5);
 
           if(workerThreadIDArray == NULL) {
 
@@ -207,9 +212,9 @@ void threadCreator(char **scannedWord) {
         strcpy(filePathItem.word, filePath);
         insertNodeAtTail(filePathList, filePathItem);
 
-        // pthread_attr_init(&workerThreadAttributes);
+        pthread_attr_init(&workerThreadAttributes);
 
-        if (pthread_create(&workerThreadIDArray[numberThreadsCreated], NULL, mapItemCreator, filePathList->tail->item.word)) {
+        if (pthread_create(&workerThreadIDArray[numberThreadsCreated], &workerThreadAttributes, mapItemCreator, filePathList->tail->item.word)) {
           perror("Cannot create thread\n");
           exit(1);
         }
@@ -223,9 +228,9 @@ void threadCreator(char **scannedWord) {
 
   }
 
-  // pthread_attr_init(&senderThreadAttributes);
+  pthread_attr_init(&senderThreadAttributes);
 
-  pthread_create(&senderThreadID, NULL, mapItemSender, NULL);
+  pthread_create(&senderThreadID, &senderThreadAttributes, mapItemSender, NULL);
 
   for(int i = 0; i < numberThreadsCreated; i++){
 
@@ -253,6 +258,8 @@ void threadCreator(char **scannedWord) {
   }
   
   closedir(threadDirPtr);
+  free(workerThreadIDArray);
+  free(filePath);
 
   exit(0);
 }
@@ -296,6 +303,7 @@ void * mapItemCreator(void *filePath) {
   }
   
   printf("\n\n\tTerminating Producer Thread!! \n\n");
+  free(scannedWord);
   pthread_exit(0);
 }
 
@@ -356,11 +364,8 @@ void * mapItemSender(void * params) {
   if(boundedBuffer->head->item.word != NULL && msgsnd(message_queue_id, &boundedBuffer->head->item, MAXWORDSIZE, 0) == -1)
     perror("msgsnd error in mapItemSender");
 
-  //NOTE SURE WHY WE NEED THIS ONE AS OF NOW. COMMENTING IT OUT FOR TESTING
-  //removeNodeAtHead(boundedBuffer);
-  
+  printf("\n\n\tTerminating Consumer Thread!! \n\n");
 
-    printf("\n\n\tTerminating Consumer Thread!! \n\n");
   pthread_exit(0);
 }
 
@@ -392,12 +397,6 @@ void insertNodeAtTail(List *listToGrow,MapItem itemToInsert) {
   }
 
   listToGrow->count++;
-  fill++;
-
-  //Testing
-  if (fill == bBufferSize) {
-    fill = 0;
-  }
 }
 
 void removeNodeAtHead(List * listToRemoveNode) {
