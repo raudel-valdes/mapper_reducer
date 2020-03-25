@@ -42,8 +42,6 @@ sem_t empty;
 sem_t full;
 sem_t mutex;
 
-FILE *outPtr;
-
 List *boundedBuffer;
 List *filePathList;
 
@@ -58,16 +56,12 @@ void threadCreator(char **);
 void *mapItemCreator(void*);
 void *mapItemSender(void*);
 
-
-
 int main(int argc, char *argv[]) {
-  outPtr = fopen("debugging.txt","a+");
-  fprintf(outPtr,"%s\n", "test1");
 
   if(argc != 3) {
     printf("Please include the following things at execution time: \n");
-    printf("  1) commandFile. \n");
-    printf("  2) bufferSize \n");
+    printf("\t 1) commandFile. \n");
+    printf("\t 2) bufferSize \n");
     exit(EXIT_FAILURE);
   }
 
@@ -86,15 +80,20 @@ int main(int argc, char *argv[]) {
 
   processCreator(argv[1]);
 
-  //destroyList(filePathList);
-  //destroyList(boundedBuffer);
+  destroyList(filePathList);
+  // destroyList(boundedBuffer);
 
   free(boundedBuffer);
 
- // 24 bytes reported by valgrind 
-  free(filePathList);
+//***********************************************
+//FOR SOME REASON THE PROGRAM WON'T TERMINATE WITHOUT THIS
+// SEEMS LIKE IT LOOSED THE FILEPATH BEFORE TERMINATING
+//***********************************************
 
-  fprintf(outPtr,"\nthis is the end of the main function: %d \n", getpid());
+  // 24 bytes reported by valgrind 
+  //free(filePathList);
+
+  printf("\nthis is the end of the main function: %d \n", getpid());
 
   return 0;
 }
@@ -104,82 +103,46 @@ void processCreator(char *cmdFile) {
   FILE *commandFilePtr = NULL;
   char *scannedWord = NULL;
   pid_t processID;
-  int numberProcessesCreated = 0;
-  pid_t *processesIDArray = NULL;
-  int sizeOfProcessesIDArray = 5;
-
-  processesIDArray = (pid_t *)malloc(sizeof(pid_t)*5);
+  int childPCount = 0;
 
   commandFilePtr = fopen(cmdFile, "r");
 
   if(commandFilePtr == NULL) {
-    perror("could not open file\n");
+    printf("could not open file %s\n", cmdFile);
     exit(1);
   }
 
-
-
   while(fscanf(commandFilePtr, "%ms", &scannedWord) != EOF) {
-
-
-    if(numberProcessesCreated == sizeOfProcessesIDArray) {
-  
-      processesIDArray = (pid_t *)realloc(processesIDArray, sizeof(pid_t)*5);
-
-      if(processesIDArray == NULL) {
-
-        perror("realloc returned NULL");
-        exit(1);
-
-      }
-
-      sizeOfProcessesIDArray *= 5;
-    }
 
     processID = fork();
 
-    fprintf(outPtr,"\nprocessID inside of processCreator: %d \n", getpid());
+    printf("\nprocessID inside of processCreator: %d \n", getpid());
 
-    if(processID < 0) {
-
+    if (processID < 0) {
       printf("Fork Failed\n");
       exit(-1);
-
     }
 
     if(processID == 0) {
-      fprintf(outPtr,"\n\n\tNUMBER OF PROCESSES: %d\n\n", numberProcessesCreated);
-      fprintf(outPtr,"%d\n", numberProcessesCreated);
-
-      processesIDArray[numberProcessesCreated] = processID;
-      
       threadCreator(&scannedWord);
-
     }
 
-    fprintf(outPtr,"NUMBER OF PROCESSES: %d\n", numberProcessesCreated);
-    numberProcessesCreated++;
+    childPCount++;
 
   }
 
-  fprintf(outPtr,"%d\n", 45);
   if(processID != 0) {
-
-    for(int i = 0; i < numberProcessesCreated; i++) {
-
-      fprintf(outPtr,"\nParent Waiting: %d \n", getpid());
-      wait(&processesIDArray[i]);
-
+    for(int i = 0; i < childPCount; i++) {
+      printf("\nParent Waiting: %d \n", getpid());
+      wait(NULL);
     }
-
-
   }
 
+  // added by Oz
   fclose(commandFilePtr);
-  free(scannedWord);
-  free(processesIDArray);
 
-  fprintf(outPtr,"\n\n  Main Process returned!!: %d \n\n", getpid());
+  printf("\n\n \tMain Process returned!!: %d \n\n", getpid());
+
 }
 
 void threadCreator(char **scannedWord) {
@@ -201,11 +164,8 @@ void threadCreator(char **scannedWord) {
   void * retvals[1];
   pthread_t senderThreadID;
   void * senderThreadRetval[1];
+
   MapItem lastWord;
-
-  int message_queue_id;
-  key_t messageKey;
-
 
   workerThreadIDArray = (pthread_t *)malloc(sizeof(pthread_t)*5);
   
@@ -215,18 +175,6 @@ void threadCreator(char **scannedWord) {
     perror("Could not open directory \n");
     exit(1);
   }
-
-  if ((messageKey = ftok("mapper.c", 1)) == -1) {
-    perror("ftok");
-    exit(1);
-  }
-
-  if ((message_queue_id = msgget(messageKey, 0644 | IPC_CREAT)) == -1) {
-    perror("msgget");
-    exit(1);
-  }
-
-  fprintf(outPtr,"Test1!");
 
   while((directoryStruct = readdir(threadDirPtr)) != NULL) {
 
@@ -250,7 +198,6 @@ void threadCreator(char **scannedWord) {
           sizeOfThreadArray *= 5;
         }
 
-        //THIS MIGHT NOT BE NECESSARY
         workerThreadIDArray[numberThreadsCreated] = numberThreadsCreated;
 
         filePath = (char *)malloc(sizeof(char)*MAXLINESIZE);
@@ -264,7 +211,6 @@ void threadCreator(char **scannedWord) {
           strcat(filePath, "/");
         }
 
-        fprintf(outPtr,"\nFILE PATH FOR THREAD: %s\n", filePath);
         strcat(filePath, directoryStruct->d_name);
         strcpy(filePathItem.word, filePath);
         insertNodeAtTail(filePathList, filePathItem);
@@ -276,14 +222,11 @@ void threadCreator(char **scannedWord) {
           exit(1);
         }
 
-        free(filePath);
-        filePath = NULL;
         numberThreadsCreated++;
 
       }
 
     }
-
 
   }
 
@@ -291,7 +234,7 @@ void threadCreator(char **scannedWord) {
 
   pthread_create(&senderThreadID, &senderThreadAttributes, mapItemSender, NULL);
 
-  for(int i = 0; i < numberThreadsCreated; i++) {
+  for(int i = 0; i < numberThreadsCreated; i++){
 
     if (pthread_join(workerThreadIDArray[i], &retvals[i]) != 0) {
       perror("\nCannot join thread\n");
@@ -299,24 +242,16 @@ void threadCreator(char **scannedWord) {
     }
   }
 
-  sem_wait(&empty);
-  sem_wait(&mutex);
+    sem_wait(&empty);
+    sem_wait(&mutex);
 
-  if(boundedBuffer->head->item.word != NULL && msgsnd(message_queue_id, &lastWord, MAXWORDSIZE, 0) == -1)
-    perror("msgsnd error in mapItemSender3");
+    strcpy(lastWord.word, "END OPERATIONS!");
+    lastWord.count = -1;
 
-  sem_post(&mutex);
-  sem_post(&full);
+    insertNodeAtTail(boundedBuffer, lastWord);
 
-  sem_wait(&empty);
-  sem_wait(&mutex);
-
-  strcpy(lastWord.word, "END OPERATIONS!");
-  lastWord.count = -1;
-  insertNodeAtTail(boundedBuffer, lastWord);
-
-  sem_post(&mutex);
-  sem_post(&full);
+    sem_post(&mutex);
+    sem_post(&full);
 
 
   if (pthread_join(senderThreadID, &senderThreadRetval[0]) != 0) {
@@ -326,17 +261,13 @@ void threadCreator(char **scannedWord) {
   
   closedir(threadDirPtr);
   free(workerThreadIDArray);
+  free(filePath);
 
-  //maybe not needed since we free uptop
-  //free(filePath);
-
-  fprintf(outPtr,"\nThread Creator has terminated!\n");
   exit(0);
 }
 
 
 void * mapItemCreator(void *filePath) {
-  fprintf(outPtr,"\nPRODUCER started!\n");
 
   FILE *filePtr = NULL;
   char *scannedWord = NULL;
@@ -352,24 +283,25 @@ void * mapItemCreator(void *filePath) {
   
   while(fscanf(filePtr, "%ms", &scannedWord) != EOF) {
 
+    strcpy(itemToSend.word, scannedWord);
+    itemToSend.count = 1;
 
-    fprintf(outPtr,"\n\n//////////////////PRODUCER/////////////////\n");
+    //printf("\n\n//////////////////PRODUCER/////////////////\n");
 
     sem_wait(&empty);
     sem_wait(&mutex);
 
-    strcpy(itemToSend.word, scannedWord);
-    itemToSend.count = 1;
     insertNodeAtTail(boundedBuffer, itemToSend);
+    printf("\nProducer - WORD: %s, PID: %d\n", itemToSend.word, getpid());
 
     sem_post(&mutex);
     sem_post(&full);
 
   }
   
-  fprintf(outPtr,"\n\nTerminating Producer Thread!! \n\n");
-
+  printf("\n\n\tTerminating Producer Thread!! \n\n");
   free(scannedWord);
+  
   fclose(filePtr);
 
   pthread_exit(0);
@@ -377,54 +309,49 @@ void * mapItemCreator(void *filePath) {
 
 void * mapItemSender(void * params) {
 
-  fprintf(outPtr,"\nCONSUMER Started!\n");
+  printf("\n\tConsumer Started!\n");
 
   int message_queue_id;
   key_t messageKey;
-  int terminate = 0;
 
   if ((messageKey = ftok("mapper.c", 1)) == -1) {
     perror("ftok");
     exit(1);
   }
 
-    fprintf(outPtr,"Test2!");
-
   if ((message_queue_id = msgget(messageKey, 0644 | IPC_CREAT)) == -1) {
     perror("msgget");
     exit(1);
   }
+  int counter = 0;
+  
+  while(boundedBuffer->head != NULL && boundedBuffer->head->item.count != -1) {
 
-  while(terminate != -1) {
-
-    fprintf(outPtr,"\n\n//////////////////CONSUMER/////////////////\n");
+  counter ++;
 
     sem_wait(&full);
     sem_wait(&mutex);
-    
-    terminate = boundedBuffer->head->item.count;
 
     if(boundedBuffer->head->item.word != NULL && msgsnd(message_queue_id, &boundedBuffer->head->item, MAXWORDSIZE, 0) == -1)
-      perror("msgsnd error in mapItemSender1");
+      perror("msgsnd error in mapItemSender");
 
     removeNodeAtHead(boundedBuffer);
-      fprintf(outPtr,"Test3!");
+    printf("\nCONSUMER: WORD: %s, PID: %d is extracted.\n", boundedBuffer->head->item.word, getpid());
 
     sem_post(&mutex);
     sem_post(&empty);
 
   }
 
-  // if(boundedBuffer->head->item.word != NULL && msgsnd(message_queue_id, &boundedBuffer->head->item, MAXWORDSIZE, 0) == -1)
-  //   perror("msgsnd error in mapItemSender2");
+  if(boundedBuffer->head->item.word != NULL && msgsnd(message_queue_id, &boundedBuffer->head->item, MAXWORDSIZE, 0) == -1)
+    perror("msgsnd error in mapItemSender2");
 
-  fprintf(outPtr,"\n\n Terminating Consumer Thread!! \n\n");
+  printf("\n\n\tTerminating Consumer Thread!! \n\n");
 
   pthread_exit(0);
 }
 
 void insertNodeAtTail(List *listToGrow,MapItem itemToInsert) {
-  fprintf(outPtr,"PRODUCER: WORD: %s\n", itemToInsert.word);
 
   Node *nextTailNode = malloc(sizeof(Node));
 
@@ -455,7 +382,7 @@ void insertNodeAtTail(List *listToGrow,MapItem itemToInsert) {
 }
 
 void removeNodeAtHead(List * listToRemoveNode) {
-  fprintf(outPtr,"\nCONSUMER: WORD: %s\n", listToRemoveNode->head->item.word);
+  printf("\nREMOVENODEATHEAD: %s\n", listToRemoveNode->head->item.word);
 
   Node *nodeToRemove = listToRemoveNode->head;
 
@@ -463,16 +390,17 @@ void removeNodeAtHead(List * listToRemoveNode) {
 
     if(nodeToRemove->next == NULL) {
 
-      listToRemoveNode->tail = NULL;
-      listToRemoveNode->head = NULL;
-      free(nodeToRemove);
+      // listToRemoveNode->tail = NULL;
+      // listToRemoveNode->head = NULL;
+
+      // free(nodeToRemove);
 
     } else {
 
       listToRemoveNode->head = nodeToRemove->next;
       nodeToRemove->next->prev = NULL;
 
-      free(nodeToRemove);
+     free(nodeToRemove);
     }
 
     listToRemoveNode->count --;
@@ -564,7 +492,7 @@ void printList(List *list, int reverse) {
     
     while (currentNode != NULL) {
 
-      fprintf(outPtr,"%s:%d\n", currentNode->item.word, currentNode->item.count);
+      printf("%s:%d\n", currentNode->item.word, currentNode->item.count);
       currentNode = currentNode->next;
 
     }
@@ -575,7 +503,7 @@ void printList(List *list, int reverse) {
     
     while (currentNode != NULL) {
 
-      fprintf(outPtr,"%s,%d\n", currentNode->item.word, currentNode->item.count);
+      printf("%s,%d\n", currentNode->item.word, currentNode->item.count);
       currentNode = currentNode->prev;
 
     }
@@ -585,14 +513,11 @@ void printList(List *list, int reverse) {
 }
 
 void destroyList(List *listToDestroy) {
-
   Node *nodeToDestroy = NULL;
   Node *tempNode = NULL;
 
   nodeToDestroy = listToDestroy->head;
-    
   while(nodeToDestroy != NULL) {
-
     tempNode = nodeToDestroy->next;
 
     free(nodeToDestroy);

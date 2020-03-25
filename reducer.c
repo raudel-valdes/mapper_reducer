@@ -12,10 +12,10 @@
 #include <semaphore.h>
 
 #define MESSAGESIZE 128
-
 #define MAXWORDSIZE 256
 #define MAXLINESIZE 1024
 
+//Structures
 typedef struct MapItem {
   int count;
   char word[MAXLINESIZE];
@@ -33,10 +33,8 @@ typedef struct List {
   int count;
 } List;
 
-// Function declaration
-
-int insertNodeAtTail(List *, MapItem);
-int removeNodeAtHead(List *);
+// Function prototypes
+void insertNodeAtTail(List *, MapItem);
 void swapAdjNodes(List **, Node **, Node **);
 void sortList(List *);
 void printList(List *, int);
@@ -46,7 +44,6 @@ void addMessages(List*, MapItem);
 void saveOutput(List *, char* );
 
 // Globals
-
 List *messagesList;
 
 // MAIN function
@@ -58,19 +55,26 @@ int main(int argc, char * argv[]){
   messagesList= (List *)malloc(sizeof(List));
 
   if ((key = ftok("mapper.c",1)) == -1) {
+
     perror("ftok");
     exit(1);
+
   }
 
   if ((message_queue_id = msgget(key, 0444)) == -1) {
+
     perror("msgget Reducer");
     exit(1);
+
   }
 
-  while(mRecieved.count != -1){
+  while(mRecieved.count != -1) {
+
    if (msgrcv(message_queue_id, &mRecieved, MAXWORDSIZE, 0, 0) == -1) {
+
     perror("msgrcv");
     exit(1);
+
   }
    
     printf("\nREDUCED: %s : %d", mRecieved.word, mRecieved.count);
@@ -91,7 +95,7 @@ int main(int argc, char * argv[]){
   //   }
 }
 
-int insertNodeAtTail(List *messagesList, MapItem itemToInsert) {
+void insertNodeAtTail(List *messagesList, MapItem itemToInsert) {
 
   Node *nextTailNode = malloc(sizeof(Node));
 
@@ -113,12 +117,11 @@ int insertNodeAtTail(List *messagesList, MapItem itemToInsert) {
     nextTailNode->next = NULL;
     currentTailNode->next = nextTailNode;
     messagesList->tail = nextTailNode;
+
   }
 
   messagesList->count++;
 
-  //succesfully inserted node
-  return 0;
 }
 
 void sortList(List *unsortedList) {
@@ -150,6 +153,7 @@ void sortList(List *unsortedList) {
        
         swapAdjNodes(&unsortedList, &compareNode, &originalSwap);
         compareNode = originalSwap->prev;
+
       }
 
       if (marker != NULL)
@@ -202,20 +206,29 @@ void printList(List *list, int reverse) {
   Node *currentNode = NULL;
 
   if (!reverse) {
+
     currentNode = list->head;
+
     while (currentNode != NULL) {
+
       printf("%s:%d\n", currentNode->item.word, currentNode->item.count);
       currentNode = currentNode->next;
+
     }
 
   } else {
+
     currentNode = list->tail;
+
     while (currentNode != NULL) {
+
       printf("%s,%d\n", currentNode->item.word, currentNode->item.count);
       currentNode = currentNode->prev;
+
     }
 
   }
+
 }
 
 void destroyList(List *listToDestroy) {
@@ -225,60 +238,76 @@ void destroyList(List *listToDestroy) {
   nodeToDestroy = listToDestroy->head;
     
   while(nodeToDestroy != NULL) {
+
     tempNode = nodeToDestroy->next;
     free(nodeToDestroy);
     nodeToDestroy = tempNode;
 
   }
+
 }
 
 bool qualifyMessage(List* lt, MapItem msg){
+
     // search for the key, if found increment counter and return true
     Node *node = lt->head;
     bool exists=false;
-    while(node!=NULL){
-        if(strcmp(node->item.word, msg.word)==0){
-            node->item.count++;
-             exists=true;
-        }
+
+    while(node!=NULL) {
+
+      if(strcmp(node->item.word, msg.word)==0) {
+
+          node->item.count++;
+          exists=true;
+
+      }
+
         node = node->next;
+
     }
+
     return exists;
+
 }
 
-void addMessages(List* list, MapItem msg){
-  if(msg.count == -1){
+void addMessages(List* list, MapItem msg) {
+
+  if(msg.count == -1)
     return;
-  }
-	else if(!qualifyMessage(list, msg)){
-        insertNodeAtTail(list, msg);
-	}
-  
+	else if(!qualifyMessage(list, msg))
+    insertNodeAtTail(list, msg);
+
 	// As a reference: if memory leaks, check for the node creation,
     // it may be the case that the insertion fails and the memory
     // allocated for the node is being not deallocated
     // If needed add a <else> clause to destroy the node
 }
 
-void saveOutput(List *list, char* file){
-	FILE *out;
-	// Flag 'w' open the file in 'write mode'
-	out = fopen(file,"w");
+void saveOutput(List *list, char* file) {
 
-	if(out == NULL){
+	FILE *out;
+	out = fopen(file,"w+");
+	Node *cursor=list->head;
+
+	if(out == NULL) {
+
 		printf("File can't be opened");
 		return;
-    }
-	Node *cursor=list->head;
-	while(cursor!=NULL){
-		if(cursor->next==NULL){
+
+  }
+  
+	while(cursor!=NULL) {
+
+		if(cursor->next==NULL) {
 			// If is the last line do not insert a new line
 			fprintf(out,"%s:%d", cursor->item.word, cursor->item.count);
 		}
-		else{
-			fprintf(out,"%s:%d\n", cursor->item.word, cursor->item.count);
-		}
+		else fprintf(out,"%s:%d\n", cursor->item.word, cursor->item.count);
+
 		cursor=cursor->next;
+
 	}
+
 	fclose(out);
+
 }
