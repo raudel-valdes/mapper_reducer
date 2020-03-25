@@ -108,15 +108,28 @@ void processCreator(char *cmdFile) {
   pid_t *processesIDArray = NULL;
   int sizeOfProcessesIDArray = 5;
 
+  MapItem lastWord;
+  int message_queue_id;
+  key_t messageKey;
+
   processesIDArray = (pid_t *)malloc(sizeof(pid_t)*5);
 
   commandFilePtr = fopen(cmdFile, "r");
+
+  if((messageKey = ftok("mapper.c", 1)) == -1) {
+    perror("ftok");
+    exit(1);
+  }
+
+  if((message_queue_id = msgget(messageKey, 0644 | IPC_CREAT)) == -1) {
+    perror("msgget");
+    exit(1);
+  }
 
   if(commandFilePtr == NULL) {
     perror("could not open file\n");
     exit(1);
   }
-
 
 
   while(fscanf(commandFilePtr, "%ms", &scannedWord) != EOF) {
@@ -172,8 +185,14 @@ void processCreator(char *cmdFile) {
 
     }
 
-
   }
+
+  strcpy(lastWord.word, "END OPERATIONS!");
+  lastWord.count = -1;
+
+  if(msgsnd(message_queue_id, &lastWord, MAXWORDSIZE, 0) == -1)
+    perror("msgsnd error in mapItemSender3");
+  
 
   fclose(commandFilePtr);
   free(scannedWord);
@@ -203,9 +222,6 @@ void threadCreator(char **scannedWord) {
   void * senderThreadRetval[1];
   MapItem lastWord;
 
-  int message_queue_id;
-  key_t messageKey;
-
 
   workerThreadIDArray = (pthread_t *)malloc(sizeof(pthread_t)*5);
   
@@ -213,16 +229,6 @@ void threadCreator(char **scannedWord) {
 
   if(!threadDirPtr) {
     perror("Could not open directory \n");
-    exit(1);
-  }
-
-  if ((messageKey = ftok("mapper.c", 1)) == -1) {
-    perror("ftok");
-    exit(1);
-  }
-
-  if ((message_queue_id = msgget(messageKey, 0644 | IPC_CREAT)) == -1) {
-    perror("msgget");
     exit(1);
   }
 
@@ -299,24 +305,18 @@ void threadCreator(char **scannedWord) {
     }
   }
 
-  sem_wait(&empty);
-  sem_wait(&mutex);
-
-  if(boundedBuffer->head->item.word != NULL && msgsnd(message_queue_id, &lastWord, MAXWORDSIZE, 0) == -1)
-    perror("msgsnd error in mapItemSender3");
-
-  sem_post(&mutex);
-  sem_post(&full);
 
   sem_wait(&empty);
   sem_wait(&mutex);
 
-  strcpy(lastWord.word, "END OPERATIONS!");
-  lastWord.count = -1;
+  strcpy(lastWord.word, "END SENDER THREAD!");
+  lastWord.count = -2;
   insertNodeAtTail(boundedBuffer, lastWord);
 
   sem_post(&mutex);
   sem_post(&full);
+
+  printf("\n\nSENDER!!\n\n");
 
 
   if (pthread_join(senderThreadID, &senderThreadRetval[0]) != 0) {
@@ -395,7 +395,7 @@ void * mapItemSender(void * params) {
     exit(1);
   }
 
-  while(terminate != -1) {
+  while(terminate != -2) {
 
     fprintf(outPtr,"\n\n//////////////////CONSUMER/////////////////\n");
 

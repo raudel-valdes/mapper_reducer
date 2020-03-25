@@ -1,10 +1,8 @@
-//This is for the mythreads.h 
-#define _GNU_SOURCE
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <dirent.h>
 #include <unistd.h>
+#include <stdbool.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <pthread.h>
@@ -12,88 +10,223 @@
 #include <errno.h>
 #include <sys/ipc.h> 
 #include <sys/msg.h>
+#include <string.h>
+#include <semaphore.h>
 
-
-//This header file came from the CECS-420 class website
-#include "mythreads.h"
-
-
-void processCreator(char *[]);
-void threadCreator(char **);
-void *mapItemCreator(void *);
 
 #define MAXWORDSIZE 256
 #define MAXLINESIZE 1024
 
-typedef struct mapItemStruct {
-  char word[MAXWORDSIZE];
-  int count;
-} mapItemStruct;
+typedef struct MapItem {
 
-int max;
-int items;
-int *buffer;
+  int count;
+  char word[MAXWORDSIZE];
+
+} MapItem;
+
+typedef struct Node{
+  MapItem item;
+  struct Node *next;
+  struct Node *prev;
+} Node;
+
+typedef struct List {
+  Node *head;
+  Node *tail;
+  int count;
+} List;
+
+int bBufferSize = 0;
+
+sem_t empty;
+sem_t full;
+sem_t mutex;
+
+FILE *outPtr;
+
+List *boundedBuffer;
+List *filePathList;
+
+void insertNodeAtTail(List *, MapItem);
+void removeNodeAtHead(List *);
+void sortList(List *);
+void swapAdjNodes(List **, Node **, Node **);
+void printList(List *, int);
+void destroyList(List *);
+void processCreator(char *);
+void threadCreator(char **);
+void *mapItemCreator(void*);
+void *mapItemSender(void*);
+
+
 
 int main(int argc, char *argv[]) {
 
   if(argc != 3) {
     printf("Please include the following things at execution time: \n");
-    printf("\t 1) commandFile. \n");
-    printf("\t 2) bufferSize \n");
+    printf("  1) commandFile. \n");
+    printf("  2) bufferSize \n");
     exit(EXIT_FAILURE);
   }
 
-  processCreator(argv);
+  bBufferSize = atoi(argv[2]);
 
+  boundedBuffer = (List *)malloc(sizeof(List));
+  filePathList = (List *)malloc(sizeof(List));
+
+  boundedBuffer->count = 0;
+  boundedBuffer->head = NULL;
+  boundedBuffer->tail = NULL;
+
+  sem_init(&empty, 0, bBufferSize);
+  sem_init(&full, 0, 0);
+  sem_init(&mutex, 0, 1); 
+
+  processCreator(argv[1]);
+
+  //destroyList(filePathList);
+  //destroyList(boundedBuffer);
+
+  free(boundedBuffer);
+
+ // 24 bytes reported by valgrind 
+  free(filePathList);
 
   return 0;
 }
 
-void processCreator(char *arguments[]) {
+void processCreator(char *cmdFile) {
+
   FILE *commandFilePtr = NULL;
   char *scannedWord = NULL;
   pid_t processID;
+  int numberProcessesCreated = 0;
+  pid_t *processesIDArray = NULL;
+  int sizeOfProcessesIDArray = 5;
+  char *line = malloc(MAXLINESIZE);
+  char *command_type = NULL;
 
-  commandFilePtr = fopen(arguments[1], "r");
+  MapItem lastWord;
+  int message_queue_id;
+  key_t messageKey;
 
-  if(commandFilePtr == NULL) {
+  processesIDArray = (pid_t *)malloc(sizeof(pid_t)*5);
 
-    printf("The file %s could not be open. Please try again!\n", arguments[1]);
-    exit(EXIT_FAILURE);
+  commandFilePtr = fopen(cmdFile, "r");
 
+  if((messageKey = ftok("mapper.c", 1)) == -1) {
+    perror("ftok");
+    exit(1);
   }
 
-  while(fscanf(commandFilePtr, "%ms", &scannedWord) == 1 && processID == 0) {
+  if((message_queue_id = msgget(messageKey, 0644 | IPC_CREAT)) == -1) {
+    perror("msgget");
+    exit(1);
+  }
+
+  if(commandFilePtr == NULL) {
+    perror("could not open file1\n");
+    exit(1);
+  }
+
+
+  while(fgets(line, MAXLINESIZE, commandFilePtr) != NULL) {
+
+    // printf("\n\nline: %s \n\n", line);
+    command_type = strtok(line, " ");
+    // printf("\n\nscanned word before: %s \n\n", scannedWord);
+    scannedWord = strdup(strtok(NULL, " "));
+    // printf("\n\nscanned word After: %s \n\n", scannedWord);
+
+    if(numberProcessesCreated == sizeOfProcessesIDArray) {
+  
+      processesIDArray = (pid_t *)realloc(processesIDArray, sizeof(pid_t)*5);
+
+      if(processesIDArray == NULL) {
+
+        perror("realloc returned NULL");
+        exit(1);
+
+      }
+
+      sizeOfProcessesIDArray *= 5;
+    }
 
     processID = fork();
 
-    if (processID < 0) {
+    if(processID < 0) {
+
       printf("Fork Failed\n");
       exit(-1);
+
     }
 
-    if(processID == 0)
+    if(processID == 0) {
+
+      processesIDArray[numberProcessesCreated] = processID;     
       threadCreator(&scannedWord);
-    else wait(NULL);
+
+    }
+
+    numberProcessesCreated++;
+
+    free(scannedWord);
+  }
+
+  if(processID != 0) {
+
+    for(int i = 0; i < numberProcessesCreated; i++) {
+
+      wait(&processesIDArray[i]);
+
+    }
 
   }
+
+  strcpy(lastWord.word, "END OPERATIONS!");
+  lastWord.count = -1;
+
+  if(msgsnd(message_queue_id, &lastWord, MAXWORDSIZE, 0) == -1)
+    perror("msgsnd error in mapItemSender3");
+  
+
+  fclose(commandFilePtr);
+  free(scannedWord);
+  free(processesIDArray);
+  free(line);
+  free(command_type);
 
 }
 
 void threadCreator(char **scannedWord) {
+
+  //directory and filepath related variables
   DIR *threadDirPtr;
   struct dirent *directoryStruct;
   char *fileExtensionPtr = NULL;
-  pthread_t threadID;
-  pthread_attr_t threadAttributes;
+  char *filePath;
+  char *lastCharInDir = NULL;
+  MapItem filePathItem;
 
+  //thread related variables
+  pthread_attr_t workerThreadAttributes;
+  pthread_attr_t senderThreadAttributes;
+  int numberThreadsCreated = 0;
+  int sizeOfThreadArray = 5;
+  pthread_t *workerThreadIDArray = NULL;
+  void * retvals[1];
+  pthread_t senderThreadID;
+  void * senderThreadRetval[1];
+  MapItem lastWord;
+
+
+  workerThreadIDArray = (pthread_t *)malloc(sizeof(pthread_t)*5);
+  
   threadDirPtr = opendir((*scannedWord));
-
+  // printf("\n\nD2 PATH: %s\n\n", *scannedWord);
   if(!threadDirPtr) {
-
-    printf("The file %s could not be open. Please try again!", (*scannedWord));
-    exit(EXIT_FAILURE);
-
+    perror("Could not open directory 2\n");
+    exit(1);
   }
 
   while((directoryStruct = readdir(threadDirPtr)) != NULL) {
@@ -102,65 +235,330 @@ void threadCreator(char **scannedWord) {
       
       if(strcmp(fileExtensionPtr, ".txt") == 0) {
 
-        pthread_attr_init(&threadAttributes);
-        pthread_create(&threadID, &threadAttributes, mapItemCreator, directoryStruct->d_name);
-        pthread_join(threadID, NULL);
+        //Keeping track of all the thread IDs. Reallocating memory to the array if there are more threads
+        //than expected
+        if(numberThreadsCreated == sizeOfThreadArray) {
+          
+          workerThreadIDArray = (pthread_t *)realloc(workerThreadIDArray, sizeof(pthread_t)*5);
+
+          if(workerThreadIDArray == NULL) {
+
+            perror("realloc returned NULL");
+            exit(1);
+
+          }
+
+          sizeOfThreadArray *= 5;
+        }
+
+        workerThreadIDArray[numberThreadsCreated] = numberThreadsCreated;
+
+        filePath = (char *)malloc(sizeof(char)*MAXLINESIZE);
+        strcat(filePath, *scannedWord);
+
+        lastCharInDir = strrchr(*scannedWord, '/');
+        if(strcmp(lastCharInDir, "/") != 0) {
+          strcat(filePath, "/");
+        }
+
+        strcat(filePath, directoryStruct->d_name);
+        strcpy(filePathItem.word, filePath);
+        insertNodeAtTail(filePathList, filePathItem);
+
+        pthread_attr_init(&workerThreadAttributes);
+
+        if (pthread_create(&workerThreadIDArray[numberThreadsCreated], &workerThreadAttributes, mapItemCreator, filePathList->tail->item.word)) {
+          perror("Cannot create thread\n");
+          exit(1);
+        }
+
+        free(filePath);
+        filePath = NULL;
+        numberThreadsCreated++;
 
       }
 
     }
 
+
   }
 
-  closedir(threadDirPtr);
+  pthread_attr_init(&senderThreadAttributes);
 
+  pthread_create(&senderThreadID, &senderThreadAttributes, mapItemSender, NULL);
+
+  for(int i = 0; i < numberThreadsCreated; i++) {
+
+    if (pthread_join(workerThreadIDArray[i], &retvals[i]) != 0) {
+      perror("\nCannot join thread\n");
+      exit(1);
+    }
+  }
+
+
+  sem_wait(&empty);
+  sem_wait(&mutex);
+
+  strcpy(lastWord.word, "END SENDER THREAD!");
+  lastWord.count = -2;
+  insertNodeAtTail(boundedBuffer, lastWord);
+
+  sem_post(&mutex);
+  sem_post(&full);
+
+  if (pthread_join(senderThreadID, &senderThreadRetval[0]) != 0) {
+    perror("\nCannot join thread\n");
+    exit(1);
+  }
+  
+  closedir(threadDirPtr);
+  free(workerThreadIDArray);
+  free(fileExtensionPtr);
+
+  exit(0);
 }
 
 
-void *mapItemCreator(void *fileName) {
+void * mapItemCreator(void *filePath) {
+
   FILE *filePtr = NULL;
   char *scannedWord = NULL;
-  mapItemStruct *mapItem = malloc(sizeof(mapItemStruct));  
-  mapItem->count = 1;
+  MapItem itemToSend;
+
+  itemToSend.count = 1;
+  filePtr = fopen((char *)filePath, "r");
+
+  if(filePtr == NULL) {
+    printf("\n The file %s could not be opened in mapItemCreator(). Please try again!\n", (char *)filePath);
+    exit(1);
+  }
+  
+  while(fscanf(filePtr, "%ms", &scannedWord) != EOF) {
+
+    sem_wait(&empty);
+    sem_wait(&mutex);
+
+    strcpy(itemToSend.word, scannedWord);
+    itemToSend.count = 1;
+    insertNodeAtTail(boundedBuffer, itemToSend);
+
+    sem_post(&mutex);
+    sem_post(&full);
+
+  }
+
+  free(scannedWord);
+  fclose(filePtr);
+
+  pthread_exit(0);
+}
+
+void * mapItemSender(void * params) {
+
   int message_queue_id;
   key_t messageKey;
+  int terminate = 0;
 
-  filePtr = fopen(fileName, "r");
-
-  // returns a key based on path and id(name of current file). The function returns the 
-  //same key for all paths that point to the same file when called 
-  //with the same id value. If ftok() is called with different id values 
-  //or path points to different files on the same file system, it returns different keys.
-  //key_t ftok(const char *path, int id);
   if ((messageKey = ftok("mapper.c", 1)) == -1) {
     perror("ftok");
     exit(1);
   }
 
-  //returns the System V message queue identifier associated with the value of the key argument.
-  //It may be used either to obtain the identifier of a previously created message
-  //queue (when msgflg is zero and key does not have the value IPC_PRIVATE), or to create a new set.
-  //A new message queue is created if key has the value IPC_PRIVATE or key isn't IPC_PRIVATE, 
-  //no message queue with the given key key exists, and IPC_CREAT is specified in msgflg.
-  //int msgget(key_t key, int msgflg);
   if ((message_queue_id = msgget(messageKey, 0644 | IPC_CREAT)) == -1) {
     perror("msgget");
     exit(1);
   }
 
-  while(fscanf(filePtr, "%ms", &scannedWord) == 1) {
+  while(terminate != -2) {
 
-    strcpy(mapItem->word, scannedWord);
+    sem_wait(&full);
+    sem_wait(&mutex);
+    
+    terminate = boundedBuffer->head->item.count;
 
-    //used to send a message to the message queue specified by the msqid parameter. 
-    //The *msgp parameter points to a user-defined buffer that must contain the 
-    //following: A field of type long int that specifies the type of the message. 
-    //A data part that contains the data bytes of the message.
-    //int msgsnd(int msqid, void *msgp, size_t msgsz, int msgflg);
-    if(msgsnd(message_queue_id, &mapItem, MAXWORDSIZE, 0) == -1)
-      perror("Error in msgsnd");
+    if(boundedBuffer->head->item.word != NULL && msgsnd(message_queue_id, &boundedBuffer->head->item, MAXWORDSIZE, 0) == -1)
+      perror("msgsnd error in mapItemSender1");
+
+    removeNodeAtHead(boundedBuffer);
+
+    sem_post(&mutex);
+    sem_post(&empty);
 
   }
 
   pthread_exit(0);
+}
+
+void insertNodeAtTail(List *listToGrow,MapItem itemToInsert) {
+
+  Node *nextTailNode = malloc(sizeof(Node));
+
+  strcpy(nextTailNode->item.word, itemToInsert.word);
+  nextTailNode->item.count = itemToInsert.count;
+
+  Node *currentHeadNode = boundedBuffer->head;
+  Node *currentTailNode = boundedBuffer->tail;
+
+  if (currentHeadNode == NULL) {
+
+    nextTailNode->prev = NULL;
+    nextTailNode->next = NULL;
+
+    listToGrow->head = nextTailNode;
+    listToGrow->tail = nextTailNode;
+
+  } else {
+
+    nextTailNode->prev = currentTailNode;
+    nextTailNode->next = NULL;
+    currentTailNode->next = nextTailNode;
+    listToGrow->tail = nextTailNode;
+
+  }
+
+  listToGrow->count++;
+}
+
+void removeNodeAtHead(List * listToRemoveNode) {
+
+  Node *nodeToRemove = listToRemoveNode->head;
+
+  if(nodeToRemove != NULL && nodeToRemove->item.word != NULL) {
+
+    if(nodeToRemove->next == NULL) {
+
+      listToRemoveNode->tail = NULL;
+      listToRemoveNode->head = NULL;
+      free(nodeToRemove);
+
+    } else {
+
+      listToRemoveNode->head = nodeToRemove->next;
+      nodeToRemove->next->prev = NULL;
+
+      free(nodeToRemove);
+    }
+
+    listToRemoveNode->count --;
+  }
+}
+
+void sortList(List *unsortedList) {
+
+  Node *marker = NULL;
+  Node *markerPrev = NULL;
+  Node *compareNode = NULL;
+  Node *originalSwap = NULL;
+
+  markerPrev = unsortedList->head;
+  marker = unsortedList->head->next;  
+
+  while(marker != NULL && markerPrev != NULL) {
+
+    if (strcmp(markerPrev->item.word, marker->item.word) < 0) {
+
+      marker = marker->next;
+      markerPrev = markerPrev->next;
+
+    } else { 
+
+      swapAdjNodes(&unsortedList, &markerPrev, &marker);
+
+      originalSwap = marker;
+      marker = markerPrev->next;
+      compareNode = originalSwap->prev;
+      
+      while(compareNode != NULL && originalSwap != NULL && (strcmp(compareNode->item.word, originalSwap->item.word) > 0)) {
+       
+        swapAdjNodes(&unsortedList, &compareNode, &originalSwap);
+        compareNode = originalSwap->prev;
+      }
+
+      if (marker != NULL)
+        markerPrev = marker->prev;
+
+    }
+  }
+
+}
+
+void swapAdjNodes(List **unsortedList, Node **nodeOne, Node **nodeTwo) {
+
+  Node *tempNode = NULL;
+  tempNode = (*nodeOne)->prev;
+
+  if(tempNode != NULL) {
+
+    tempNode->next = (*nodeTwo);
+    (*nodeTwo)->prev = tempNode;
+    (*nodeOne)->next = (*nodeTwo)->next;
+    (*nodeTwo)->next = (*nodeOne);
+
+  } else {
+
+    (*nodeTwo)->prev = tempNode;
+    (*nodeOne)->next = (*nodeTwo)->next;
+    (*nodeTwo)->next = (*nodeOne);
+    (*unsortedList)->head = (*nodeTwo);
+
+  }
+
+  tempNode = (*nodeOne)->next;
+
+  if(tempNode != NULL) {
+
+    tempNode->prev = (*nodeOne);
+    (*nodeOne)->prev = (*nodeTwo);
+
+  } else {
+
+    (*nodeOne)->prev = (*nodeTwo);
+    (*unsortedList)->tail = (*nodeOne);
+
+  }
+
+}
+
+void printList(List *list, int reverse) {
+
+  Node *currentNode = NULL;
+
+  if (!reverse) {
+    currentNode = list->head;
+    
+    while (currentNode != NULL) {
+
+      currentNode = currentNode->next;
+
+    }
+
+  } else {
+    
+    currentNode = list->tail;
+    
+    while (currentNode != NULL) {
+
+      currentNode = currentNode->prev;
+
+    }
+
+  }
+
+}
+
+void destroyList(List *listToDestroy) {
+
+  Node *nodeToDestroy = NULL;
+  Node *tempNode = NULL;
+
+  nodeToDestroy = listToDestroy->head;
+    
+  while(nodeToDestroy != NULL) {
+
+    tempNode = nodeToDestroy->next;
+
+    free(nodeToDestroy);
+    nodeToDestroy = tempNode;
+
+  }
 }

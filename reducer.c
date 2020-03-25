@@ -67,7 +67,7 @@ int main(int argc, char * argv[]){
     exit(1);
 
   }
-
+int count = 0;
   while(mRecieved.count != -1) {
 
    if (msgrcv(message_queue_id, &mRecieved, MAXWORDSIZE, 0, 0) == -1) {
@@ -77,8 +77,10 @@ int main(int argc, char * argv[]){
 
   }
    
-    printf("\nREDUCED: %s : %d", mRecieved.word, mRecieved.count);
+    // printf("\nREDUCED: %s : %d", mRecieved.word, mRecieved.count);
     addMessages(messagesList,mRecieved);
+    sortList(messagesList);
+    // printf("\nFINAL COUNT: %d", messagesList->count);
    
   }
 
@@ -272,7 +274,7 @@ bool qualifyMessage(List* lt, MapItem msg){
 
 void addMessages(List* list, MapItem msg) {
 
-  if(msg.count == -1)
+  if(msg.count == -1 || msg.count == -2)
     return;
 	else if(!qualifyMessage(list, msg))
     insertNodeAtTail(list, msg);
